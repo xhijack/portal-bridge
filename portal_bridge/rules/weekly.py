@@ -12,8 +12,17 @@ from portal_bridge.utils import INTERNAL_ROLES, audit, is_client, project_users,
 
 
 def week_no_for(project: str, on=None) -> int:
-	start = frappe.db.get_value("Project", project, "expected_start_date")
+	"""Nomor minggu: melanjutkan laporan terakhir yang ada (menjaga penomoran PIC);
+	bila belum ada laporan, dihitung dari expected_start_date project."""
 	on = getdate(on or today())
+	last = frappe.get_all(
+		"Portal Weekly Update", filters={"project": project}, fields=["week_no", "period_end"],
+		order_by="week_no desc, version desc", limit=1,
+	)
+	if last and last[0].period_end:
+		gap_weeks = max(0, round(date_diff(on, getdate(last[0].period_end)) / 7))
+		return int(last[0].week_no) + max(1, gap_weeks)
+	start = frappe.db.get_value("Project", project, "expected_start_date")
 	if not start:
 		return int(on.isocalendar()[1])
 	return max(1, date_diff(on, getdate(start)) // 7 + 1)
