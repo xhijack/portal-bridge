@@ -14,6 +14,7 @@
   "col1",
   "send_after",
   "sent_at",
+  "read_at",
   "dedupe_key",
   "error",
   "sec_payload",
@@ -73,6 +74,12 @@
    "fieldname": "sent_at",
    "fieldtype": "Datetime",
    "label": "Sent At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "read_at",
+   "fieldtype": "Datetime",
+   "label": "Read At",
    "read_only": 1
   },
   {

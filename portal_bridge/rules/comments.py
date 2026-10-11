@@ -23,6 +23,11 @@ def _ref_link(project: str, ref_doctype: str, ref_name: str, comment: str | None
 	return f"{portal_url()}{path}" + (f"#komentar-{comment}" if comment else "")
 
 
+def plain_text(body: str) -> str:
+	"""@[Nama](email) → @Nama untuk kutipan di notifikasi."""
+	return MENTION_RE.sub(lambda m: "@" + (m.group(1) or m.group(3) or ""), body or "")
+
+
 def parse_mentions(body: str, project: str, explicit: list[str] | None = None) -> list[str]:
 	"""@nama → baris mentions. Hanya Project User project itu (klien dan internal) yang sah (aturan 17)."""
 	allowed = {u["user"] for u in project_users(project)}
@@ -78,7 +83,7 @@ def rule_17_notify_mentions(doc):
 	for m in doc.mentions:
 		if m.user == doc.author_user:
 			continue
-		notify.enqueue(m.user, "mention", {"actor": actor, "excerpt": doc.body[:120], "link": link}, doc.project,
+		notify.enqueue(m.user, "mention", {"actor": actor, "excerpt": plain_text(doc.body)[:120], "link": link}, doc.project,
 		               dedupe_key=f"mention:{doc.name}:{m.user}")
 
 
@@ -96,7 +101,7 @@ def _notify_thread(doc):
 	mentioned = {m.user for m in doc.mentions}
 	hour_key = now_datetime().strftime("%Y%m%d%H")
 	for u in participants - mentioned - {doc.author_user, None}:
-		notify.enqueue(u, "comment_new", {"actor": actor, "excerpt": doc.body[:120], "ref_title": ref_title, "link": link},
+		notify.enqueue(u, "comment_new", {"actor": actor, "excerpt": plain_text(doc.body)[:120], "ref_title": ref_title, "link": link},
 		               doc.project, dedupe_key=f"thread:{doc.ref_name}:{u}:{hour_key}")
 
 

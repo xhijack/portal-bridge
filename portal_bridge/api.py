@@ -666,3 +666,60 @@ def projects():
 	from portal_bridge.auth import me as _me
 
 	return _me()["projects"]
+
+
+# ---------------------------------------------------------------- notifikasi dalam portal & anggota
+
+
+@frappe.whitelist()
+def notifications(limit: int = 30):
+	"""Daftar notifikasi user ini (apa pun kanalnya) untuk lonceng di portal + jumlah belum dibaca."""
+	require_login()
+	user = frappe.session.user
+	rows = frappe.get_all(
+		"Portal Notification",
+		filters={"user": user, "status": ["in", ["Queued", "Sent", "Failed", "Skipped"]]},
+		fields=["name", "template", "project", "payload", "message", "channel", "status", "creation", "read_at"],
+		order_by="creation desc",
+		limit=cint(limit) or 30,
+	)
+	out = []
+	for r in rows:
+		payload = frappe.parse_json(r.payload) if r.payload else {}
+		out.append(
+			{
+				"name": r.name,
+				"template": r.template,
+				"project": r.project,
+				"subject": (payload or {}).get("subject") or r.template,
+				"link": (payload or {}).get("link"),
+				"message": r.message,
+				"channel": r.channel,
+				"status": r.status,
+				"created_at": r.creation,
+				"read": bool(r.read_at),
+			}
+		)
+	unread = frappe.db.count("Portal Notification", {"user": user, "read_at": ["is", "not set"]})
+	return {"items": out, "unread": unread}
+
+
+@frappe.whitelist(methods=["POST"])
+def mark_notifications_read(names=None):
+	require_login()
+	user = frappe.session.user
+	if isinstance(names, str):
+		names = frappe.parse_json(names) if names else None
+	filters = {"user": user, "read_at": ["is", "not set"]}
+	if names:
+		filters["name"] = ["in", names]
+	for n in frappe.get_all("Portal Notification", filters=filters, pluck="name"):
+		frappe.db.set_value("Portal Notification", n, "read_at", frappe.utils.now_datetime(), update_modified=False)
+	return {"ok": True}
+
+
+@frappe.whitelist()
+def project_members(project: str):
+	"""Anggota project (klien + internal) untuk @mention dan tampilan PIC."""
+	project = require_access(project)
+	return project_users(project)
