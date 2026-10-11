@@ -28,7 +28,7 @@ GATE_KINDS = ("UAT", "Go-live", "BAST", "BRD", "Training")
 
 
 def _link(doc):
-	return f"{portal_url()}/{doc.project}/persetujuan/{doc.name}"
+	return f"{portal_url()}/{doc.project}/approvals/{doc.name}"
 
 
 def rule_20_on_create(doc):

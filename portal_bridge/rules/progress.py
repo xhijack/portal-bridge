@@ -56,6 +56,8 @@ def load_tree(project: str) -> tuple[list, dict]:
 		order_by="exp_start_date asc, idx asc, creation asc",
 		limit_page_length=5000,
 	)
+	# task tanpa tanggal mulai diletakkan setelah yang bertanggal (MariaDB menaruh NULL di awal)
+	rows.sort(key=lambda r: (r.exp_start_date is None, str(r.exp_start_date or ""), r.idx or 0))
 	by_name = {r.name: r for r in rows}
 	children: dict = {}
 	for r in rows:

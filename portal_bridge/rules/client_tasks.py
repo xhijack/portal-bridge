@@ -163,7 +163,7 @@ def rule_8_reminders(now=None) -> int:
 			"due": frappe.utils.formatdate(t.exp_end_date),
 			"blocks": ("Menahan " + blocks_text(blocks) + ".") if blocks else "",
 			"late_days": -days if days < 0 else 0,
-			"link": f"{frappe.utils.get_url() if not s.portal_url else s.portal_url.rstrip('/')}/{t.project}/tugas?task={t.name}",
+			"link": f"{frappe.utils.get_url() if not s.portal_url else s.portal_url.rstrip('/')}/{t.project}/tasks?task={t.name}",
 		}
 		template = None
 		if days == 2:

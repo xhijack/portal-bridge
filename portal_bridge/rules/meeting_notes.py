@@ -27,7 +27,7 @@ from portal_bridge.utils import (
 
 
 def _link(doc):
-	return f"{portal_url()}/{doc.project}/notulen/{doc.name}"
+	return f"{portal_url()}/{doc.project}/meeting-notes/{doc.name}"
 
 
 def rule_12_on_sent(doc):

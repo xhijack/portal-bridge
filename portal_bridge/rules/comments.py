@@ -16,10 +16,10 @@ MENTION_RE = re.compile(r"@\[([^\]]+)\]\(([^)]+)\)|@([\w.+-]+@[\w.-]+)")
 
 def _ref_link(project: str, ref_doctype: str, ref_name: str, comment: str | None = None) -> str:
 	path = {
-		"Portal Meeting Note": f"/{project}/notulen/{ref_name}",
-		"Portal Signoff": f"/{project}/persetujuan/{ref_name}",
-		"Task": f"/{project}/tugas?task={ref_name}",
-	}.get(ref_doctype, f"/{project}/ringkasan")
+		"Portal Meeting Note": f"/{project}/meeting-notes/{ref_name}",
+		"Portal Signoff": f"/{project}/approvals/{ref_name}",
+		"Task": f"/{project}/tasks?task={ref_name}",
+	}.get(ref_doctype, f"/{project}/overview")
 	return f"{portal_url()}{path}" + (f"#komentar-{comment}" if comment else "")
 
 

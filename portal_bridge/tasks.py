@@ -71,7 +71,7 @@ def signoff_due_reminders() -> int:
 	count = 0
 	for r in rows:
 		ctx = {"kind": r.kind, "title": r.title, "due": frappe.utils.formatdate(r.due),
-		       "link": f"{portal_url()}/{r.project}/persetujuan/{r.name}"}
+		       "link": f"{portal_url()}/{r.project}/approvals/{r.name}"}
 		for u in project_users(r.project, side="klien"):
 			if u["can_approve"] and notify.enqueue(u["user"], "signoff_due", ctx, r.project, dedupe_key=f"so-due:{r.name}:{u['user']}"):
 				count += 1

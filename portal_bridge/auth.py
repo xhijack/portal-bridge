@@ -1,7 +1,7 @@
 """Masuk lewat magic link (WhatsApp/email) tanpa kata sandi.
 
 Alur: frontend POST request_magic_link(phone|email) → selalu {sent: true} → pesan berisi
-{portal_url}/masuk/{token} → frontend POST exchange(token) → sesi Frappe untuk Website User klien
+{portal_url}/login/{token} → frontend POST exchange(token) → sesi Frappe untuk Website User klien
 (cookie sid) → semua panggilan /api/resource dan /api/method berjalan sebagai klien itu, dibatasi
 permission hook portal_bridge.
 """
@@ -91,7 +91,7 @@ def issue_magic_link(user: str, target: str = "/", send: bool = True) -> tuple[s
 			"user_agent": (frappe.get_request_header("User-Agent") or "")[:300] if getattr(frappe.local, "request", None) else None,
 		}
 	).insert(ignore_permissions=True)
-	link = f"{portal_url()}/masuk/{token}"
+	link = f"{portal_url()}/login/{token}"
 	if target and target != "/":
 		link += f"?target={frappe.utils.quote(target)}"
 	if send:
@@ -230,7 +230,7 @@ def preview_link(user: str, target: str = "/"):
 	if not is_client(user):
 		frappe.throw(_("User bukan klien portal."), frappe.ValidationError)
 	_name, token = issue_magic_link(user, target, send=False)
-	link = f"{portal_url()}/masuk/{token}"
+	link = f"{portal_url()}/login/{token}"
 	audit("preview_link", ref_doctype="User", ref_name=user)
 	return {"link": link}
 

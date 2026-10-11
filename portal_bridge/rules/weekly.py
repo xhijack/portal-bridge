@@ -107,7 +107,7 @@ def on_approved(doc):
 	}
 	from portal_bridge.utils import portal_url
 
-	ctx["link"] = f"{portal_url()}/{doc.project}/ringkasan"
+	ctx["link"] = f"{portal_url()}/{doc.project}/overview"
 	for u in project_users(doc.project, side="klien"):
 		notify.enqueue(u["user"], "weekly_approved", ctx, doc.project, dedupe_key=f"weekly:{doc.name}:{u['user']}")
 	frappe.cache.delete_value(f"portal_summary:{doc.project}")
