@@ -405,15 +405,20 @@ def upload_task_file(task: str):
 
 @frappe.whitelist()
 def weekly_updates(project: str):
+	"""Daftar laporan mingguan. Klien: hanya Approved. Internal: termasuk Draft (ditandai status)."""
 	project = require_access(project)
+	filters = {"project": project}
+	if is_client():
+		filters["status"] = "Approved"
 	rows = frappe.get_all(
 		"Portal Weekly Update",
-		filters={"project": project, "status": "Approved"},
-		fields=["name", "week_no", "period_start", "period_end", "health", "approved_by", "approved_on", "version"],
+		filters=filters,
+		fields=["name", "week_no", "period_start", "period_end", "health", "approved_by", "approved_on", "version", "status",
+		        "drafted_by_ai", "modified"],
 		order_by="week_no desc, version desc",
 	)
 	for r in rows:
-		r["approved_by"] = user_display(r.approved_by)
+		r["approved_by"] = user_display(r.approved_by) if r.approved_by else None
 	return rows
 
 
@@ -423,11 +428,29 @@ def weekly_update(name: str):
 	require_access(doc.project)
 	if doc.status != "Approved" and is_client():
 		frappe.throw(_("Tidak ditemukan."), frappe.DoesNotExistError)
+	# task yang selesai / dimulai dalam periode laporan (dari data Task, pelengkap isi laporan PIC)
+	done_tasks = frappe.get_all(
+		"Task", filters={"project": doc.project, "portal_visible": 1, "is_group": 0, "status": "Completed",
+		                 "completed_on": ["between", [doc.period_start, doc.period_end]]},
+		fields=["name", "subject", "completed_on", "exp_end_date"], order_by="completed_on asc",
+	)
+	started_tasks = frappe.get_all(
+		"Task", filters={"project": doc.project, "portal_visible": 1, "is_group": 0, "status": ["!=", "Cancelled"],
+		                 "act_start_date": ["between", [doc.period_start, doc.period_end]]},
+		fields=["name", "subject", "act_start_date", "status", "progress"], order_by="act_start_date asc",
+	)
+	versions = frappe.get_all(
+		"Portal Weekly Update", filters={"project": doc.project, "week_no": doc.week_no, "status": "Approved"},
+		fields=["name", "version", "approved_on"], order_by="version desc",
+	)
 	return {
-		"name": doc.name, "week_no": doc.week_no, "period_start": doc.period_start, "period_end": doc.period_end,
-		"health": doc.health, "done": doc.done, "in_progress": doc.in_progress, "risks": doc.risks,
+		"name": doc.name, "project": doc.project, "week_no": doc.week_no, "period_start": doc.period_start, "period_end": doc.period_end,
+		"health": doc.health, "status": doc.status, "done": doc.done, "in_progress": doc.in_progress, "risks": doc.risks,
 		"client_actions": [{"text": r.text, "task": r.task} for r in doc.client_actions],
-		"approved_by": user_display(doc.approved_by), "approved_on": doc.approved_on, "version": doc.version,
+		"approved_by": user_display(doc.approved_by) if doc.approved_by else None, "approved_on": doc.approved_on, "version": doc.version,
+		"drafted_by_ai": bool(doc.drafted_by_ai),
+		"done_tasks": done_tasks, "started_tasks": started_tasks, "versions": versions,
+		"progress": pr.rule_1_progress(doc.project),
 	}
 
 
