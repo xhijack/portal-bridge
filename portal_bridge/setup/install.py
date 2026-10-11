@@ -109,9 +109,10 @@ CLIENT_DOCPERMS = {
 	"Task": {"read": 1},
 	"File": {"read": 1},
 	"Task Type": {"read": 1},
-	"Customer": {"read": 1},
-	"Contact": {"read": 1},
 }
+
+# DocPerm yang pernah diberikan lalu dicabut (Customer/Contact: klien tidak boleh melihat daftar pelanggan lain)
+REVOKED_CLIENT_DOCPERMS = ("Customer", "Contact")
 
 INTERNAL_ROLES = ("Projects Manager", "Projects User")
 
@@ -178,6 +179,9 @@ def make_task_type():
 
 
 def make_docperms():
+	for doctype in REVOKED_CLIENT_DOCPERMS:
+		for name in frappe.get_all("Custom DocPerm", filters={"parent": doctype, "role": CLIENT_ROLE}, pluck="name"):
+			frappe.delete_doc("Custom DocPerm", name, ignore_permissions=True, force=True)
 	for doctype, rights in CLIENT_DOCPERMS.items():
 		if not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": CLIENT_ROLE, "permlevel": 0}):
 			add_permission(doctype, CLIENT_ROLE, 0)

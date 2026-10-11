@@ -66,6 +66,15 @@ class TestPermissions(FrappeTestCase):
 		# role Portal Klien ditambahkan otomatis saat Customer disimpan
 		self.assertTrue(frappe.db.exists("Has Role", {"parent": self.w.c1, "role": "Portal Klien"}))
 
+	def test_client_cannot_list_customers_or_contacts(self):
+		frappe.set_user(self.w.a1)
+		for dt in ("Customer", "Contact", "Sales Order", "Sales Invoice", "User"):
+			try:
+				rows = frappe.get_list(dt, pluck="name", limit=5)
+			except frappe.PermissionError:
+				rows = []
+			self.assertEqual(rows, [], f"klien bisa melihat daftar {dt}")
+
 	def test_internal_user_unaffected(self):
 		frappe.set_user(self.w.pic)
 		names = set(frappe.get_list("Task", filters={"project": ["in", [self.w.proj_a, self.w.proj_b]]}, pluck="name"))
