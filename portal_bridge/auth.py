@@ -262,5 +262,6 @@ def health():
 		"theme": {"brand": s.brand_color, "brand_hover": s.brand_hover_color, "accent": s.accent_color},
 		"magic_link_days": s.magic_link_days or 7,
 		"portal_url": s.portal_url,
+		"channels": {"whatsapp": bool(s.whatsapp_enabled and s.whatsapp_base_url), "email": bool(s.email_enabled)},
 		"warnings": warnings,
 	}
