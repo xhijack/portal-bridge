@@ -51,10 +51,13 @@ def render(template: str, context: dict, locale: str | None = None) -> tuple[str
 		return template, json.dumps(context, default=str)
 	ctx = {"product": settings().product_name or "Portal", "link": portal_url(), **context}
 	subject, body = spec
-	try:
-		return subject.format(**ctx), body.format(**ctx)
-	except KeyError:
-		return subject, body
+
+	class _Safe(dict):
+		def __missing__(self, key):  # variabel yang tidak dikirim → kosong, bukan "{key}"
+			return ""
+
+	safe = _Safe(ctx)
+	return subject.format_map(safe).strip(" ·"), body.format_map(safe)
 
 
 def user_prefs(user: str) -> dict:

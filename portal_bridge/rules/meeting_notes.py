@@ -41,7 +41,8 @@ def rule_12_on_sent(doc):
 		task_type = CLIENT_TASK_TYPE if (row.assignee and is_client(row.assignee)) else None
 		with elevated():
 			row.task = _make_action_task(doc, row, task_type, phase)
-	ctx = {"seq": doc.seq, "title": doc.title, "confirm_due": frappe.utils.formatdate(doc.confirm_due), "link": _link(doc)}
+	ctx = {"seq": doc.seq, "title": doc.title, "confirm_due": frappe.utils.formatdate(doc.confirm_due), "link": _link(doc),
+	       "project_name": frappe.db.get_value("Project", doc.project, "project_name")}
 	for u in project_users(doc.project, side="klien"):
 		notify.enqueue(u["user"], "meeting_note_sent", ctx, doc.project, dedupe_key=f"mn-sent:{doc.name}:{doc.version}:{u['user']}")
 	audit("meeting_note_sent", doc.project, doc.doctype, doc.name)
@@ -119,7 +120,7 @@ def rule_14_close_overdue(on=None) -> int:
 		doc.flags.portal_decision = True
 		doc.save(ignore_permissions=True)
 		audit("meeting_note_deemed", doc.project, doc.doctype, doc.name, {"confirm_due": str(doc.confirm_due)}, user="Administrator")
-		ctx = {"seq": doc.seq, "title": doc.title, "link": _link(doc)}
+		ctx = {"seq": doc.seq, "title": doc.title, "link": _link(doc), "project_name": frappe.db.get_value("Project", doc.project, "project_name")}
 		for u in project_users(doc.project):
 			notify.enqueue(u["user"], "meeting_note_deemed", ctx, doc.project, dedupe_key=f"mn-deemed:{doc.name}:{u['user']}")
 	return len(names)
@@ -150,7 +151,7 @@ def rule_15_on_edit_after_sent(doc, before):
 		doc.pdf_file = None
 		doc.pdf_hash = None
 		doc.confirm_due = add_working_days(today(), int(settings().meeting_note_confirm_days or 2), project_company(doc.project))
-	ctx = {"seq": doc.seq, "title": doc.title, "version": doc.version, "link": _link(doc)}
+	ctx = {"seq": doc.seq, "title": doc.title, "version": doc.version, "link": _link(doc), "project_name": frappe.db.get_value("Project", doc.project, "project_name")}
 	for u in project_users(doc.project, side="klien"):
 		notify.enqueue(u["user"], "meeting_note_updated", ctx, doc.project, dedupe_key=f"mn-upd:{doc.name}:{doc.version}:{u['user']}")
 
