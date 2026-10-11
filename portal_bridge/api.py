@@ -417,6 +417,12 @@ def weekly_updates(project: str):
 		        "drafted_by_ai", "modified"],
 		order_by="week_no desc, version desc",
 	)
+	# hanya versi tertinggi per minggu; versi lama tetap tersedia di detail (riwayat versi)
+	latest = {}
+	for r in rows:
+		if r.week_no not in latest:
+			latest[r.week_no] = r
+	rows = list(latest.values())
 	for r in rows:
 		r["approved_by"] = user_display(r.approved_by) if r.approved_by else None
 	return rows
