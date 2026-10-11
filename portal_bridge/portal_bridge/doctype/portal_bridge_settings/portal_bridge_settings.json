@@ -1,0 +1,252 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-11 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "branding_section",
+  "product_name",
+  "portal_url",
+  "logo",
+  "locale",
+  "col1",
+  "brand_color",
+  "brand_hover_color",
+  "accent_color",
+  "density_default",
+  "rules_section",
+  "magic_link_days",
+  "session_days",
+  "meeting_note_confirm_days",
+  "signoff_due_days",
+  "col2",
+  "reminder_hour",
+  "max_overdue_reminders",
+  "progress_from_visible_only",
+  "comment_delete_minutes",
+  "messenger_section",
+  "whatsapp_enabled",
+  "whatsapp_base_url",
+  "whatsapp_send_path",
+  "whatsapp_token",
+  "whatsapp_sender_label",
+  "col3",
+  "email_enabled",
+  "email_sender"
+ ],
+ "fields": [
+  {
+   "fieldname": "branding_section",
+   "fieldtype": "Section Break",
+   "label": "Branding"
+  },
+  {
+   "fieldname": "product_name",
+   "fieldtype": "Data",
+   "label": "Product Name",
+   "default": "Sopwer Portal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "portal_url",
+   "fieldtype": "Data",
+   "label": "Portal URL",
+   "description": "Alamat frontend portal, mis. https://portal.sopwer.id (tanpa garis miring akhir)"
+  },
+  {
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo"
+  },
+  {
+   "fieldname": "locale",
+   "fieldtype": "Select",
+   "label": "Locale",
+   "options": "id\nen",
+   "default": "id"
+  },
+  {
+   "fieldname": "col1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "brand_color",
+   "fieldtype": "Data",
+   "label": "Brand Color",
+   "default": "#2E78D9"
+  },
+  {
+   "fieldname": "brand_hover_color",
+   "fieldtype": "Data",
+   "label": "Brand Hover Color",
+   "default": "#1F5FB8"
+  },
+  {
+   "fieldname": "accent_color",
+   "fieldtype": "Data",
+   "label": "Accent Color",
+   "default": "#FBB217"
+  },
+  {
+   "fieldname": "density_default",
+   "fieldtype": "Select",
+   "label": "Density Default",
+   "options": "rapat\nnyaman",
+   "default": "rapat"
+  },
+  {
+   "fieldname": "rules_section",
+   "fieldtype": "Section Break",
+   "label": "Aturan"
+  },
+  {
+   "fieldname": "magic_link_days",
+   "fieldtype": "Int",
+   "label": "Magic Link Days",
+   "default": "7"
+  },
+  {
+   "fieldname": "session_days",
+   "fieldtype": "Int",
+   "label": "Session Days",
+   "default": "30"
+  },
+  {
+   "fieldname": "meeting_note_confirm_days",
+   "fieldtype": "Int",
+   "label": "Meeting Note Confirm Days",
+   "default": "2",
+   "description": "Hari kerja"
+  },
+  {
+   "fieldname": "signoff_due_days",
+   "fieldtype": "Int",
+   "label": "Signoff Due Days",
+   "default": "5",
+   "description": "Hari kerja"
+  },
+  {
+   "fieldname": "col2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reminder_hour",
+   "fieldtype": "Int",
+   "label": "Reminder Hour",
+   "default": "8",
+   "description": "Jam (waktu site) pengiriman reminder tugas klien"
+  },
+  {
+   "fieldname": "max_overdue_reminders",
+   "fieldtype": "Int",
+   "label": "Max Overdue Reminders",
+   "default": "3"
+  },
+  {
+   "fieldname": "progress_from_visible_only",
+   "fieldtype": "Check",
+   "label": "Progress From Visible Only",
+   "default": "0"
+  },
+  {
+   "fieldname": "comment_delete_minutes",
+   "fieldtype": "Int",
+   "label": "Comment Delete Minutes",
+   "default": "10"
+  },
+  {
+   "fieldname": "messenger_section",
+   "fieldtype": "Section Break",
+   "label": "Messenger"
+  },
+  {
+   "fieldname": "whatsapp_enabled",
+   "fieldtype": "Check",
+   "label": "WhatsApp Enabled"
+  },
+  {
+   "fieldname": "whatsapp_base_url",
+   "fieldtype": "Data",
+   "label": "WhatsApp Base URL",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_send_path",
+   "fieldtype": "Data",
+   "label": "WhatsApp Send Path",
+   "default": "/api/send",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_token",
+   "fieldtype": "Password",
+   "label": "WhatsApp Token",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "whatsapp_sender_label",
+   "fieldtype": "Data",
+   "label": "WhatsApp Sender Label",
+   "default": "Portal",
+   "depends_on": "whatsapp_enabled"
+  },
+  {
+   "fieldname": "col3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "email_enabled",
+   "fieldtype": "Check",
+   "label": "Email Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "email_sender",
+   "fieldtype": "Data",
+   "label": "Email Sender",
+   "description": "Kosong = Email Account default site"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 0,
+ "issingle": 1,
+ "is_submittable": 0,
+ "links": [],
+ "modified": "2026-10-11 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Portal Bridge",
+ "name": "Portal Bridge Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 0,
+   "cancel": 0,
+   "amend": 0,
+   "email": 1,
+   "print": 1,
+   "report": 1,
+   "share": 1,
+   "export": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "Portal Klien",
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

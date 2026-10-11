@@ -1,0 +1,297 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-11 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "project",
+  "kind",
+  "title",
+  "doc_version",
+  "ref_doctype",
+  "ref_name",
+  "col1",
+  "status",
+  "requested_by",
+  "requested_on",
+  "due",
+  "sec_summary",
+  "summary",
+  "attachment",
+  "sec_impact",
+  "impact_man_days",
+  "impact_timeline_days",
+  "col2",
+  "impact_invoices",
+  "new_tasks",
+  "sec_decision",
+  "decided_by_user",
+  "decided_name",
+  "decided_on",
+  "col3",
+  "decided_ip",
+  "client_note",
+  "sec_evidence",
+  "pdf_file",
+  "pdf_hash",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "BRD\nUAT\nTraining\nGo-live\nBAST\nChange Request",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "doc_version",
+   "fieldtype": "Data",
+   "label": "Doc Version",
+   "default": "1.0"
+  },
+  {
+   "fieldname": "ref_doctype",
+   "fieldtype": "Link",
+   "label": "Ref DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "ref_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Ref Name",
+   "options": "ref_doctype"
+  },
+  {
+   "fieldname": "col1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nApproved\nRevision requested\nRejected",
+   "default": "Pending",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "allow_on_submit": 0
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_on",
+   "fieldtype": "Datetime",
+   "label": "Requested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "due",
+   "fieldtype": "Date",
+   "label": "Due"
+  },
+  {
+   "fieldname": "sec_summary",
+   "fieldtype": "Section Break",
+   "label": "Ringkasan"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Text Editor",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment",
+   "description": "Dokumen yang disetujui (PDF BRD, laporan UAT, dll.)"
+  },
+  {
+   "fieldname": "sec_impact",
+   "fieldtype": "Section Break",
+   "label": "Dampak (Change Request)",
+   "depends_on": "eval:doc.kind=='Change Request'"
+  },
+  {
+   "fieldname": "impact_man_days",
+   "fieldtype": "Float",
+   "label": "Impact Man Days"
+  },
+  {
+   "fieldname": "impact_timeline_days",
+   "fieldtype": "Int",
+   "label": "Impact Timeline Days"
+  },
+  {
+   "fieldname": "col2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "impact_invoices",
+   "fieldtype": "Table",
+   "label": "Impact Invoices",
+   "options": "Portal Signoff Invoice"
+  },
+  {
+   "fieldname": "new_tasks",
+   "fieldtype": "Table",
+   "label": "New Tasks",
+   "options": "Portal Signoff Task"
+  },
+  {
+   "fieldname": "sec_decision",
+   "fieldtype": "Section Break",
+   "label": "Keputusan"
+  },
+  {
+   "fieldname": "decided_by_user",
+   "fieldtype": "Link",
+   "label": "Decided By User",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_name",
+   "fieldtype": "Data",
+   "label": "Decided Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_on",
+   "fieldtype": "Datetime",
+   "label": "Decided On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "decided_ip",
+   "fieldtype": "Data",
+   "label": "Decided IP",
+   "read_only": 1
+  },
+  {
+   "fieldname": "client_note",
+   "fieldtype": "Small Text",
+   "label": "Client Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_evidence",
+   "fieldtype": "Section Break",
+   "label": "Bukti"
+  },
+  {
+   "fieldname": "pdf_file",
+   "fieldtype": "Attach",
+   "label": "PDF File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pdf_hash",
+   "fieldtype": "Data",
+   "label": "PDF Hash",
+   "read_only": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Portal Signoff",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 0,
+ "issingle": 0,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-10-11 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Portal Bridge",
+ "name": "Portal Signoff",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Projects Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Projects User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "amend": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1
+  },
+  {
+   "role": "Portal Klien",
+   "read": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "format:PSO-{project}-{kind}-{####}",
+ "naming_rule": "Expression",
+ "title_field": "title",
+ "search_fields": "title,project,kind"
+}
