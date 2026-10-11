@@ -14,6 +14,7 @@ after_migrate = "portal_bridge.setup.install.after_migrate"
 # Permission untuk role Portal Klien (Website User): hanya dokumen bertanda portal_visible
 # pada project yang user-nya tercatat di Project User.
 permission_query_conditions = {
+	"User": "portal_bridge.permissions.user_query",
 	"Project": "portal_bridge.permissions.project_query",
 	"Task": "portal_bridge.permissions.task_query",
 	"File": "portal_bridge.permissions.file_query",
@@ -25,6 +26,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"User": "portal_bridge.permissions.user_has_permission",
 	"Project": "portal_bridge.permissions.project_has_permission",
 	"Task": "portal_bridge.permissions.task_has_permission",
 	"File": "portal_bridge.permissions.file_has_permission",

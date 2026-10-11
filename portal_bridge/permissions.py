@@ -102,6 +102,13 @@ def evidence_query(user):
 	return _portal_doc_query("Portal Evidence", user)
 
 
+def user_query(user):
+	"""Klien hanya boleh melihat dirinya sendiri di daftar User."""
+	if not is_client(user):
+		return None
+	return f"`tabUser`.`name` = {frappe.db.escape(user)}"
+
+
 # ------------------------------------------------------------- has_permission
 
 
@@ -175,3 +182,9 @@ def comment_has_permission(doc, ptype, user):
 
 def evidence_has_permission(doc, ptype, user):
 	return _portal_doc_has_permission(doc, ptype, user)
+
+
+def user_has_permission(doc, ptype, user):
+	if not is_client(user):
+		return None
+	return doc.name == user and ptype in ("read", "select")

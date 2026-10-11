@@ -68,12 +68,15 @@ class TestPermissions(FrappeTestCase):
 
 	def test_client_cannot_list_customers_or_contacts(self):
 		frappe.set_user(self.w.a1)
-		for dt in ("Customer", "Contact", "Sales Order", "Sales Invoice", "User"):
+		for dt in ("Customer", "Contact", "Sales Order", "Sales Invoice"):
 			try:
 				rows = frappe.get_list(dt, pluck="name", limit=5)
 			except frappe.PermissionError:
 				rows = []
 			self.assertEqual(rows, [], f"klien bisa melihat daftar {dt}")
+		# User: hanya dirinya sendiri
+		self.assertEqual(frappe.get_list("User", pluck="name", limit=5), [self.w.a1])
+		self.assertFalse(frappe.has_permission("User", "read", self.w.b1))
 
 	def test_internal_user_unaffected(self):
 		frappe.set_user(self.w.pic)
