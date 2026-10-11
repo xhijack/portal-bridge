@@ -9,6 +9,9 @@ def task_before_save(doc, method=None):
 	# Aturan: task bertipe Klien atau milestone otomatis tampil ke klien
 	if doc.type == CLIENT_TASK_TYPE or doc.is_milestone:
 		doc.portal_visible = 1
+	# Project "tampilkan semua task": task baru otomatis tampil (yang lama diatur saat Project disimpan)
+	if doc.is_new() and doc.project and frappe.db.get_value("Project", doc.project, "portal_show_all_tasks"):
+		doc.portal_visible = 1
 
 
 def task_on_update(doc, method=None):
@@ -40,4 +43,10 @@ def customer_on_update(doc, method=None):
 
 def project_on_update(doc, method=None):
 	_ensure_client_role([r.user for r in doc.get("users", [])])
+	before = doc.get_doc_before_save()
+	if doc.get("portal_show_all_tasks") and not (before and before.get("portal_show_all_tasks")):
+		# sekali jalan saat dicentang: semua task project tampil ke klien
+		frappe.db.sql(
+			"""update `tabTask` set portal_visible = 1 where project = %s and status != 'Cancelled'""", doc.name
+		)
 	frappe.cache.delete_value(f"portal_summary:{doc.name}")

@@ -71,50 +71,66 @@ def _project_header(project: str) -> dict:
 
 
 def _wbs_map(project: str) -> dict[str, str]:
-	m = {}
-	for ph in pr.rule_3_phases(project):
-		m[ph["name"]] = str(ph["no"])
-	kids = frappe.get_all(
-		"Task",
-		filters={"project": project, "is_group": 0, "status": ["!=", "Cancelled"], "parent_task": ["is", "set"]},
-		fields=["name", "parent_task"],
-		order_by="exp_start_date asc, idx asc, creation asc",
-	)
-	counter: dict[str, int] = {}
-	for k in kids:
-		if k.parent_task not in m:
-			continue
-		counter[k.parent_task] = counter.get(k.parent_task, 0) + 1
-		m[k.name] = f"{m[k.parent_task]}.{counter[k.parent_task]}"
+	"""Nomor WBS rekursif: fase 1 → 1.1 → 1.1.1 …"""
+	roots, _ = pr.load_tree(project)
+	m: dict[str, str] = {}
+
+	def walk(nodes, prefix):
+		n = 0
+		for node in nodes:
+			n += 1
+			code = f"{prefix}.{n}" if prefix else str(n)
+			m[node.name] = code
+			walk(node.get("children", []), code)
+
+	groups = [r for r in roots if r.is_group]
+	walk(groups, "")
 	return m
 
 
-def _task_row(t, wbs_map: dict[str, str], with_blocks=True) -> dict:
+def _task_row(t, wbs_map: dict[str, str], with_blocks=True, depth=0) -> dict:
 	users = assigned_users(t.get("_assign"))
 	assignee = user_display(users[0]) if users else None
-	blocks = ct.rule_7_blocks(t.name, wbs_map) if with_blocks else []
+	is_group = bool(t.get("is_group"))
+	blocks = ct.rule_7_blocks(t.name, wbs_map) if (with_blocks and not is_group) else []
+	kids = t.get("children", []) if is_group else []
 	return {
 		"name": t.name,
 		"wbs": wbs_map.get(t.name),
 		"subject": t.subject,
 		"type": t.type,
 		"is_client": t.type == CLIENT_TASK_TYPE,
+		"is_group": is_group,
+		"depth": depth,
+		"parent": t.get("parent_task"),
+		"children_count": len(kids),
+		"leaf_count": len(pr.leaves(t)) if is_group else 0,
+		"done_count": sum(1 for l in pr.leaves(t) if l.status == "Completed") if is_group else 0,
 		"assignee": assignee,
 		"assignees": [user_display(u) for u in users],
 		"start": t.exp_start_date,
 		"due": t.exp_end_date,
-		"status": ct.status_key(t),
+		"actual_start": t.get("act_start_date"),
+		"actual_end": t.get("act_end_date") or (t.get("completed_on") if t.status == "Completed" else None),
+		"status": ("done" if (is_group and kids and all(l.status == "Completed" for l in pr.leaves(t))) else ("working" if is_group else ct.status_key(t))),
 		"raw_status": t.status,
-		"progress": cint(t.progress),
-		"late_days": ct.late_days(t),
+		"progress": cint(pr.node_progress(t)) if is_group else (100 if t.status == "Completed" else cint(t.progress)),
+		"late_days": 0 if is_group else ct.late_days(t),
 		"blocks": blocks,
 		"blocks_text": ct.blocks_text(blocks),
 		"is_milestone": bool(t.is_milestone),
 		"signoff_type": t.portal_signoff_type,
-		"phase": t.parent_task,
+		"phase": t.get("parent_task"),
 		"completed_on": t.completed_on,
 		"priority": t.priority,
 	}
+
+
+def _flatten(node, wbs, depth, out):
+	for k in node.get("children", []):
+		out.append(_task_row(k, wbs, depth=depth))
+		if k.get("is_group"):
+			_flatten(k, wbs, depth + 1, out)
 
 
 def _client_tasks(project: str, only_user: str | None = None, status: str | None = None) -> list[dict]:
@@ -210,6 +226,7 @@ def summary(project: str):
 		"health": health,
 		"phases": phases,
 		"active_phase": next((p for p in phases if p["status"] == "active"), None),
+		"progress": pr.rule_1_progress(project),
 		"kpi": {
 			"progress": pr.rule_1_progress(project),
 			"client_tasks_open": len(open_mine),
@@ -241,51 +258,56 @@ def summary(project: str):
 def plan(project: str, filter: str | None = None, q: str | None = None):
 	project = require_access(project)
 	header = _project_header(project)
-	phases = pr.rule_3_phases(project)
+	phases = pr.rule_3_phases(project, with_tree=True)
 	wbs = _wbs_map(project)
-	tasks = frappe.get_all(
-		"Task",
-		filters={"project": project, "portal_visible": 1, "is_group": 0, "status": ["!=", "Cancelled"]},
-		fields=pr.TASK_FIELDS + ["project"],
-		order_by="exp_start_date asc, idx asc, creation asc",
-		limit_page_length=500,
-	)
-	rows = [_task_row(t, wbs) for t in tasks]
 	q = (q or "").strip().lower()
+	all_rows = []
+	out_phases = []
+	for ph in phases:
+		rows: list = []
+		_flatten(ph.pop("tree"), wbs, 0, rows)
+		all_rows += [r for r in rows if not r["is_group"]]
+		out_phases.append({**ph, "tasks": rows})
 	counts = {
-		"all": len(rows),
-		"client": sum(1 for r in rows if r["is_client"]),
-		"late": sum(1 for r in rows if r["status"] == "late"),
-		"gate": sum(1 for r in rows if r["is_milestone"] and r["signoff_type"]),
+		"all": len(all_rows),
+		"client": sum(1 for r in all_rows if r["is_client"]),
+		"late": sum(1 for r in all_rows if r["status"] == "late"),
+		"gate": sum(1 for r in all_rows if r["is_milestone"] and r["signoff_type"]),
 	}
 
 	def keep(r):
+		if r["is_group"]:
+			return True  # grup disaring di bawah bila tak punya anak yang lolos
 		if filter == "client" and not r["is_client"]:
 			return False
 		if filter == "late" and r["status"] != "late":
 			return False
 		if filter == "gate" and not (r["is_milestone"] and r["signoff_type"]):
 			return False
-		if q and q not in (r["subject"] or "").lower() and q not in (r["assignee"] or {}).get("full_name", "").lower():
+		if q and q not in (r["subject"] or "").lower() and q not in ((r["assignee"] or {}).get("full_name") or "").lower():
 			return False
 		return True
 
-	by_phase: dict[str, list] = {}
-	orphan = []
-	for r in rows:
-		if not keep(r):
-			continue
-		(by_phase.setdefault(r["phase"], []) if r["phase"] in wbs else orphan).append(r)
-	out_phases = []
-	for ph in phases:
-		out_phases.append({**ph, "tasks": by_phase.get(ph["name"], [])})
-	if orphan:
-		out_phases.append({"name": None, "no": len(phases) + 1, "label": "Lainnya", "status": "planned", "tasks": orphan})
+	if filter or q:
+		for ph in out_phases:
+			kept = [r for r in ph["tasks"] if keep(r)]
+			# buang grup yang tidak punya daun lolos di bawahnya
+			leaf_parents = set()
+			by_name = {r["name"]: r for r in ph["tasks"]}
+			for r in kept:
+				if r["is_group"]:
+					continue
+				p_ = r["parent"]
+				while p_ and p_ in by_name:
+					leaf_parents.add(p_)
+					p_ = by_name[p_]["parent"]
+			ph["tasks"] = [r for r in kept if not r["is_group"] or r["name"] in leaf_parents]
 	start = getdate(header["start"]) if header["start"] else None
 	end = getdate(header["end"]) if header["end"] else None
 	return {
 		"project": header,
 		"health": pr.rule_4_health(project),
+		"progress": pr.rule_1_progress(project),
 		"baseline": header["start"],
 		"total_days": (end - start).days if start and end else None,
 		"day_of": (today() - start).days if start else None,
@@ -312,14 +334,20 @@ def my_tasks(project: str, status: str | None = None):
 
 @frappe.whitelist()
 def task(name: str):
-	t = frappe.db.get_value("Task", name, pr.TASK_FIELDS + ["project", "description", "portal_visible"], as_dict=True)
+	t = frappe.db.get_value("Task", name, pr.TASK_FIELDS + ["project", "description"], as_dict=True)
 	if not t:
 		frappe.throw(_("Tugas tidak ditemukan."), frappe.DoesNotExistError)
 	project = require_access(t.project)
-	if not t.portal_visible:
+	if not t.portal_visible and not t.is_group:
 		frappe.throw(_("Tugas tidak ditemukan."), frappe.DoesNotExistError)
 	wbs = _wbs_map(project)
+	if t.is_group:
+		roots, by_name = pr.load_tree(project)
+		node = by_name.get(name)
+		if node is not None:
+			t = node
 	row = _task_row(t, wbs)
+	row["children"] = [_task_row(k, wbs, with_blocks=False, depth=1) for k in t.get("children", [])] if t.is_group else []
 	row["description"] = t.description
 	row["mine"] = frappe.session.user in assigned_users(t._assign)
 	row["phase_label"] = frappe.db.get_value("Task", t.parent_task, "subject") if t.parent_task else None
