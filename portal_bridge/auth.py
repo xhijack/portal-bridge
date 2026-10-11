@@ -265,3 +265,45 @@ def health():
 		"channels": {"whatsapp": bool(s.whatsapp_enabled and s.whatsapp_base_url), "email": bool(s.email_enabled)},
 		"warnings": warnings,
 	}
+
+
+@frappe.whitelist()
+def diagnose(user: str):
+	"""System Manager: jelaskan kenapa seorang user melihat (atau tidak melihat) project di portal."""
+	if "System Manager" not in frappe.get_roles():
+		frappe.throw(_("Hanya System Manager."), frappe.PermissionError)
+	from portal_bridge.utils import client_projects, customers_of
+
+	u = frappe.db.get_value("User", user, ["name", "enabled", "user_type", "mobile_no", "email"], as_dict=True)
+	if not u:
+		return {"user": user, "error": "User tidak ada"}
+	roles = frappe.get_roles(user)
+	customers = customers_of(user)
+	project_user_rows = frappe.get_all("Project User", filters={"user": user, "parenttype": "Project"}, fields=["parent", "portal_can_approve"])
+	customer_projects = frappe.get_all("Project", filters={"customer": ["in", customers or [""]]}, fields=["name", "project_name", "portal_enabled", "customer"]) if customers else []
+	enabled_projects = frappe.get_all("Project", filters={"portal_enabled": 1}, fields=["name", "project_name", "customer"])
+	clear_project_cache(user)
+	reasons = []
+	if not u.enabled:
+		reasons.append("User dinonaktifkan")
+	if u.user_type != "Website User" and CLIENT_ROLE not in roles:
+		reasons.append("User bukan Website User dan tidak berole Portal Klien → diperlakukan sebagai internal; hanya melihat project portal_enabled yang ia punya izin baca (role Projects Manager/User)")
+	if u.user_type == "Website User" and not customers and not project_user_rows:
+		reasons.append("Website User ini tidak tercantum di Customer → Portal Users maupun Project → Users")
+	if customers and not any(p.portal_enabled for p in customer_projects):
+		reasons.append("Customer-nya ada, tapi tidak ada project customer itu yang portal_enabled (atau field customer di Project kosong/berbeda)")
+	if project_user_rows and not frappe.db.exists("Project", {"name": ["in", [r.parent for r in project_user_rows]], "portal_enabled": 1}):
+		reasons.append("Tercantum di Project → Users, tapi project itu belum portal_enabled")
+	return {
+		"user": u,
+		"roles": roles,
+		"is_client": is_client(user),
+		"is_internal": is_internal(user),
+		"customers_with_portal_user": customers,
+		"customer_projects": customer_projects,
+		"project_user_rows": project_user_rows,
+		"all_enabled_projects": enabled_projects,
+		"visible_projects": client_projects(user) if is_client(user) else accessible_projects(user),
+		"reasons": reasons or ["Tidak ada masalah terdeteksi; user seharusnya melihat visible_projects"],
+		"bridge_version": __import__("portal_bridge").__version__,
+	}
