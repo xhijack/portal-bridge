@@ -53,6 +53,19 @@ class TestPermissions(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			frappe.get_doc("Task", self.w.task_b_vis).check_permission("read")
 
+	def test_customer_portal_user_gets_customer_projects(self):
+		from portal_bridge.utils import can_approve, client_projects, is_client, project_users
+
+		frappe.set_user("Administrator")
+		self.assertTrue(is_client(self.w.c1))
+		self.assertEqual(client_projects(self.w.c1), [self.w.proj_b])
+		self.assertTrue(can_approve(self.w.proj_b, self.w.c1))
+		self.assertIn(self.w.c1, [u["user"] for u in project_users(self.w.proj_b, side="klien")])
+		self.assertEqual(self._projects_as(self.w.c1), {self.w.proj_b})
+		self.assertEqual(self._tasks_as(self.w.c1), {self.w.phase_b, self.w.task_b_vis, self.w.task_b_client})
+		# role Portal Klien ditambahkan otomatis saat Customer disimpan
+		self.assertTrue(frappe.db.exists("Has Role", {"parent": self.w.c1, "role": "Portal Klien"}))
+
 	def test_internal_user_unaffected(self):
 		frappe.set_user(self.w.pic)
 		names = set(frappe.get_list("Task", filters={"project": ["in", [self.w.proj_a, self.w.proj_b]]}, pluck="name"))

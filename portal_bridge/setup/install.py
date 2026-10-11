@@ -45,6 +45,16 @@ CUSTOM_FIELDS = {
 			"description": "Boleh konfirmasi notulen dan sign-off",
 		},
 	],
+	"Portal User": [
+		{
+			"fieldname": "portal_can_approve",
+			"fieldtype": "Check",
+			"label": "Portal Can Approve",
+			"insert_after": "user",
+			"in_list_view": 1,
+			"description": "Boleh konfirmasi notulen dan sign-off untuk semua project customer ini",
+		},
+	],
 	"Task": [
 		{
 			"fieldname": "portal_section",

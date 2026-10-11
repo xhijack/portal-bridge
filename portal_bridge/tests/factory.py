@@ -120,6 +120,11 @@ def make_world(prefix="pbt"):
 	w.cust_b = make_customer(f"{prefix} Klien B")
 	w.proj_a = make_project(f"{prefix} Proyek A", w.cust_a, [w.pic, w.a1, w.a2], can_approve=[w.a1])
 	w.proj_b = make_project(f"{prefix} Proyek B", w.cust_b, [w.pic, w.b1], can_approve=[w.b1])
+	# c1: hanya lewat Customer B → Portal Users (tidak ada di Project User), berwenang approve
+	w.c1 = make_client(f"{prefix}-c1@klien-b.test", "Citra", ph + "4")
+	cust = frappe.get_doc("Customer", w.cust_b)
+	cust.append("portal_users", {"user": w.c1, "portal_can_approve": 1})
+	cust.save(ignore_permissions=True)
 	w.phase_a = make_phase(w.proj_a, "Fase A1")
 	w.phase_b = make_phase(w.proj_b, "Fase B1")
 	w.task_a_vis = make_task(w.proj_a, "A tampil", w.phase_a, visible=1)
@@ -130,4 +135,5 @@ def make_world(prefix="pbt"):
 	frappe.clear_cache(user=w.a1)
 	frappe.clear_cache(user=w.a2)
 	frappe.clear_cache(user=w.b1)
+	frappe.clear_cache(user=w.c1)
 	return w

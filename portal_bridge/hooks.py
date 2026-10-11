@@ -40,6 +40,8 @@ doc_events = {
 		"before_save": "portal_bridge.events.task_before_save",
 		"on_update": "portal_bridge.events.task_on_update",
 	},
+	"Customer": {"on_update": "portal_bridge.events.customer_on_update"},
+	"Project": {"on_update": "portal_bridge.events.project_on_update"},
 }
 
 scheduler_events = {
