@@ -287,3 +287,12 @@ def elevated():
 		yield
 	finally:
 		frappe.set_user(prev)
+
+
+def cleanup_portal_links(doctype: str, name: str):
+	"""Saat dokumen portal dihapus: buang jejak audit, notifikasi, dan evidence yang menunjuk ke dokumen itu
+	agar Dynamic Link tidak menghalangi penghapusan oleh PIC."""
+	frappe.db.delete("Portal Audit Log", {"ref_doctype": doctype, "ref_name": name})
+	frappe.db.delete("Portal Evidence", {"ref_doctype": doctype, "ref_name": name})
+	for n in frappe.get_all("Portal Comment", filters={"ref_doctype": doctype, "ref_name": name}, pluck="name"):
+		frappe.delete_doc("Portal Comment", n, ignore_permissions=True, force=True)

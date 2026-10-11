@@ -5,6 +5,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from portal_bridge.utils import cleanup_portal_links
+
 from portal_bridge.rules.signoff import (
 	notify_pending,
 	rule_20_on_create,
@@ -39,3 +41,6 @@ class PortalSignoff(Document):
 
 	def on_update(self):
 		frappe.cache.delete_value(f"portal_summary:{self.project}")
+
+	def on_trash(self):
+		cleanup_portal_links(self.doctype, self.name)

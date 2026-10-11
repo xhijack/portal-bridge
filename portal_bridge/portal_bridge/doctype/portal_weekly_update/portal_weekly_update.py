@@ -5,6 +5,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from portal_bridge.utils import cleanup_portal_links
+
 from portal_bridge.rules.weekly import on_approved, rule_10_check_approver
 
 
@@ -26,3 +28,6 @@ class PortalWeeklyUpdate(Document):
 			on_approved(self)
 			self.db_set({"approved_by": self.approved_by, "approved_on": self.approved_on}, update_modified=False)
 		frappe.cache.delete_value(f"portal_summary:{self.project}")
+
+	def on_trash(self):
+		cleanup_portal_links(self.doctype, self.name)
