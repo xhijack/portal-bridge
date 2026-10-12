@@ -647,6 +647,13 @@ def feedback_item(name: str):
 	return fb.detail(name)
 
 
+@frappe.whitelist()
+def feedback_tasks(project: str):
+	"""Pilihan task terkait untuk form/tabel feedback (ringan; `plan` terlalu berat untuk dropdown)."""
+	project = require_access(project)
+	return fb.task_options(project)
+
+
 @frappe.whitelist(methods=["POST"])
 def create_feedback(project: str, items):
 	"""items: [{subject, kind?, description?, task?, date?, files?: [File.name]}] → {created: [Issue.name]}"""

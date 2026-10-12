@@ -20,7 +20,7 @@ from frappe.utils.file_manager import save_file
 from portal_bridge import notify
 from portal_bridge.rules import comments as cm
 from portal_bridge.setup.install import FEEDBACK_ISSUE_TYPES
-from portal_bridge.utils import audit, internal_pics, is_client, is_internal, portal_url, project_users, user_display
+from portal_bridge.utils import audit, internal_pics, is_client, is_internal, portal_url, user_display
 
 KINDS = FEEDBACK_ISSUE_TYPES
 KIND_BY_TYPE = {v: k for k, v in KINDS.items()}
@@ -69,19 +69,35 @@ def _file_row(f) -> dict:
 	return {"name": f.name, "file_name": f.file_name, "file_url": f.file_url, "file_size": f.file_size, "is_image": ext in IMAGE_EXT}
 
 
-def _task_label(task: str | None) -> dict | None:
-	if not task:
-		return None
-	t = frappe.db.get_value("Task", task, ["name", "subject", "status", "portal_visible"], as_dict=True)
-	if not t:
-		return None
-	return {"name": t.name, "subject": t.subject, "status": t.status}
+def _task_labels(task_names: list[str]) -> dict[str, dict]:
+	names = [n for n in set(task_names) if n]
+	if not names:
+		return {}
+	return {t.name: {"name": t.name, "subject": t.subject, "status": t.status}
+	        for t in frappe.get_all("Task", filters={"name": ["in", names]}, fields=["name", "subject", "status"])}
 
 
-def serialize(row, files: list[dict], open_comments: int, user: str | None = None) -> dict:
+def _raised_by_display(user: str | None) -> dict:
+	"""user_display dengan memo per request (is_client/get_fullname beberapa query per user)."""
+	memo = getattr(frappe.local, "portal_user_display_memo", None)
+	if memo is None:
+		memo = frappe.local.portal_user_display_memo = {}
+	if user not in memo:
+		if user and frappe.db.exists("User", user):
+			memo[user] = user_display(user)
+		else:
+			memo[user] = {"user": user, "full_name": user, "first_name": user, "side": "klien"}
+	return memo[user]
+
+
+def serialize(row, files: list[dict], open_comments: int, user: str | None = None, *, internal: bool | None = None,
+              tasks: dict[str, dict] | None = None) -> dict:
 	user = user or frappe.session.user
 	mine = row.raised_by == user
-	internal = is_internal(user)
+	if internal is None:
+		internal = is_internal(user)
+	if tasks is None:
+		tasks = _task_labels([row.portal_task])
 	return {
 		"name": row.name,
 		"subject": row.subject,
@@ -90,9 +106,8 @@ def serialize(row, files: list[dict], open_comments: int, user: str | None = Non
 		"priority": row.priority,
 		"date": row.opening_date,
 		"status": row.status,
-		"task": _task_label(row.portal_task),
-		"raised_by": user_display(row.raised_by) if row.raised_by and frappe.db.exists("User", row.raised_by) else
-		{"user": row.raised_by, "full_name": row.raised_by, "first_name": row.raised_by, "side": "klien"},
+		"task": tasks.get(row.portal_task) if row.portal_task else None,
+		"raised_by": _raised_by_display(row.raised_by),
 		"description": row.description,
 		"resolution": row.resolution_details,
 		"first_responded_on": row.first_responded_on,
@@ -121,7 +136,9 @@ def list_rows(project: str, status: str | None = None, user: str | None = None) 
 			fields=["ref_name"],
 		):
 			open_counts[c.ref_name] = open_counts.get(c.ref_name, 0) + 1
-	items = [serialize(r, files.get(r.name, []), open_counts.get(r.name, 0), user) for r in rows]
+	internal = is_internal(user)
+	tasks = _task_labels([r.portal_task for r in rows])
+	items = [serialize(r, files.get(r.name, []), open_counts.get(r.name, 0), user, internal=internal, tasks=tasks) for r in rows]
 	counts = {s: 0 for s in STATUSES}
 	for it in items:
 		counts[it["status"]] = counts.get(it["status"], 0) + 1
@@ -145,8 +162,22 @@ def detail(name: str, user: str | None = None) -> dict:
 	d = serialize(row, files, cm.open_counts("Issue", name).get("__open__", 0), user)
 	d["project"] = row.project
 	d["comments"] = cm.threads("Issue", name)
-	d["mentionables"] = project_users(row.project)
+	# mentionables tidak dikirim di sini: frontend memakai project_members (cache 5 menit)
 	return d
+
+
+def task_options(project: str) -> list[dict]:
+	"""Pilihan "task terkait" yang ringan (tanpa pohon/blocks seperti `plan`): task tampil, bukan grup, belum dibatalkan."""
+	from portal_bridge.api import _wbs_map
+
+	wbs = _wbs_map(project)
+	rows = frappe.get_all(
+		"Task", filters={"project": project, "portal_visible": 1, "is_group": 0, "status": ["!=", "Cancelled"]},
+		fields=["name", "subject", "status", "exp_end_date"], order_by="exp_end_date asc, idx asc",
+	)
+	out = [{"name": r.name, "subject": r.subject, "status": r.status, "wbs": wbs.get(r.name)} for r in rows]
+	out.sort(key=lambda r: [int(x) if x.isdigit() else 0 for x in (r["wbs"] or "9999").split(".")])
+	return out
 
 
 def needs_action_count(project: str, user: str | None = None) -> int:
