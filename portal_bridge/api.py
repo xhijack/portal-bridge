@@ -16,6 +16,7 @@ from frappe.utils.file_manager import save_file
 from portal_bridge.rules import billing as billing_rules
 from portal_bridge.rules import client_tasks as ct
 from portal_bridge.rules import comments as cm
+from portal_bridge.rules import feedback as fb
 from portal_bridge.rules import meeting_notes as mn
 from portal_bridge.rules import progress as pr
 from portal_bridge.rules import signoff as so
@@ -248,6 +249,7 @@ def summary(project: str):
 			"tasks": len(open_mine),
 			"notulen": 1 if pending_note else 0,
 			"persetujuan": len(pending_signoffs) if (not is_client(user) or can_approve(project, user)) else 0,
+			"feedback": fb.needs_action_count(project, user),
 		},
 		"can_approve": can_approve(project, user) if is_client(user) else True,
 		"all_client_tasks_open": len(open_all),
@@ -619,6 +621,71 @@ def decide_signoff(name: str, decision: str, full_name: str | None = None, attes
 	project = frappe.db.get_value("Portal Signoff", name, "project")
 	require_access(project)
 	return so.rule_21_decide(name, decision, full_name, attest, note)
+
+
+# ---------------------------------------------------------------- feedback (Issue)
+
+
+def _feedback_project(name: str) -> str:
+	row = frappe.db.get_value("Issue", name, ["project", "portal_visible"], as_dict=True)
+	if not row or not row.project or (is_client() and not row.portal_visible):
+		frappe.throw(_("Feedback tidak ditemukan."), frappe.DoesNotExistError)
+	return require_access(row.project)
+
+
+@frappe.whitelist()
+def feedback(project: str, status: str | None = None):
+	"""Daftar feedback project (semua kolom yang dibutuhkan mode daftar dan mode tabel)."""
+	project = require_access(project)
+	return fb.list_rows(project, status)
+
+
+@frappe.whitelist()
+def feedback_item(name: str):
+	project = _feedback_project(name)
+	audit("feedback_view", project, "Issue", name)
+	return fb.detail(name)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_feedback(project: str, items):
+	"""items: [{subject, kind?, description?, task?, date?, files?: [File.name]}] → {created: [Issue.name]}"""
+	project = require_access(project)
+	if isinstance(items, str):
+		items = frappe.parse_json(items)
+	names = fb.rule_f1_create(project, items)
+	return {"created": names}
+
+
+@frappe.whitelist(methods=["POST"])
+def upload_feedback_file(issue: str | None = None):
+	"""Multipart field 'file'. Tanpa `issue` → file dititipkan, kirim File.name di create_feedback.files."""
+	require_login()
+	if issue:
+		_feedback_project(issue)
+	files = frappe.request.files if getattr(frappe, "request", None) else None
+	if not files or "file" not in files:
+		frappe.throw(_("Tidak ada file."), frappe.ValidationError)
+	f = files["file"]
+	file_doc = fb.stage_file(f.filename or "file", f.stream.read(), issue)
+	return {"ok": True, "file": fb._file_row(file_doc)}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_feedback(name: str, subject: str | None = None, description: str | None = None, kind: str | None = None,
+                    task: str | None = None, date: str | None = None):
+	_feedback_project(name)
+	changes = {k: v for k, v in {"subject": subject, "description": description, "kind": kind, "task": task, "date": date}.items()
+	           if v is not None}
+	doc = fb.rule_f3_update(name, changes)
+	return {"ok": True, "name": doc.name, "status": doc.status}
+
+
+@frappe.whitelist(methods=["POST"])
+def decide_feedback(name: str, decision: str, note: str | None = None):
+	"""decision: close (sudah sesuai) | reopen (belum sesuai, note wajib)."""
+	_feedback_project(name)
+	return fb.rule_f4_decide(name, decision, note)
 
 
 # ---------------------------------------------------------------- dokumen, tagihan, profil

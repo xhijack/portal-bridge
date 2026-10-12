@@ -98,6 +98,31 @@ CUSTOM_FIELDS = {
 			"description": "Boleh diunduh klien lewat portal",
 		},
 	],
+	"Issue": [
+		{
+			"fieldname": "portal_section",
+			"fieldtype": "Section Break",
+			"label": "Portal Klien",
+			"insert_after": "description",
+			"collapsible": 1,
+		},
+		{
+			"fieldname": "portal_visible",
+			"fieldtype": "Check",
+			"label": "Portal Visible",
+			"insert_after": "portal_section",
+			"in_standard_filter": 1,
+			"description": "Tampil ke klien di portal sebagai feedback. Otomatis 1 bila dibuat dari portal",
+		},
+		{
+			"fieldname": "portal_task",
+			"fieldtype": "Link",
+			"options": "Task",
+			"label": "Portal Task",
+			"insert_after": "portal_visible",
+			"description": "Task yang dimaksud klien (opsional)",
+		},
+	],
 	"User": [
 		{
 			"fieldname": "portal_notif_pref",
@@ -117,7 +142,12 @@ CLIENT_DOCPERMS = {
 	"Task": {"read": 1},
 	"File": {"read": 1},
 	"Task Type": {"read": 1},
+	"Issue": {"read": 1},
+	"Issue Type": {"read": 1},
 }
+
+# Issue Type untuk feedback portal (kunci → nama di Desk); dipakai rules/feedback.py
+FEEDBACK_ISSUE_TYPES = {"bug": "Bug", "change": "Permintaan Perubahan", "question": "Pertanyaan", "suggestion": "Saran"}
 
 # DocPerm yang pernah diberikan lalu dicabut (Customer/Contact: klien tidak boleh melihat daftar pelanggan lain)
 REVOKED_CLIENT_DOCPERMS = ("Customer", "Contact")
@@ -137,6 +167,7 @@ def setup():
 	seed_settings()
 	make_role()
 	make_task_type()
+	make_issue_types()
 	create_custom_fields(CUSTOM_FIELDS, ignore_validate=True, update=True)
 	make_docperms()
 	make_print_formats()
@@ -184,6 +215,12 @@ def make_task_type():
 				"description": "Tugas yang dikerjakan sisi klien (data, UAT, keputusan)",
 			}
 		).insert(ignore_permissions=True)
+
+
+def make_issue_types():
+	for name in FEEDBACK_ISSUE_TYPES.values():
+		if not frappe.db.exists("Issue Type", name):
+			frappe.get_doc({"doctype": "Issue Type", "name": name, "description": "Feedback klien lewat portal"}).insert(ignore_permissions=True)
 
 
 def make_docperms():

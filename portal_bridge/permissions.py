@@ -48,6 +48,15 @@ def task_query(user):
 	)
 
 
+def issue_query(user):
+	projects = _projects_or_none(user)
+	if projects is None:
+		return None
+	if not projects:
+		return DENY
+	return f"`tabIssue`.`project` in ({_in_clause(projects)}) and `tabIssue`.`portal_visible` = 1"
+
+
 def file_query(user):
 	projects = _projects_or_none(user)
 	if projects is None:
@@ -62,6 +71,13 @@ def file_query(user):
 	for dt in ("Portal Meeting Note", "Portal Signoff", "Portal Weekly Update"):
 		portal_docs += [(dt, n) for n in frappe.get_all(dt, filters={"project": ["in", projects]}, pluck="name")]
 	clauses = [f"(`tabFile`.`attached_to_doctype` = 'Project' and `tabFile`.`attached_to_name` in ({_in_clause(projects)}))"]
+	issues = frappe.get_all("Issue", filters={"project": ["in", projects], "portal_visible": 1}, pluck="name")
+	if issues:
+		clauses.append(f"(`tabFile`.`attached_to_doctype` = 'Issue' and `tabFile`.`attached_to_name` in ({_in_clause(issues)}))")
+	# file feedback yang baru diunggah dan belum ditautkan ke Issue: hanya pemiliknya
+	clauses.append(
+		f"(`tabFile`.`owner` = {frappe.db.escape(user)} and coalesce(`tabFile`.`attached_to_doctype`, '') = '')"
+	)
 	if tasks:
 		clauses.append(f"(`tabFile`.`attached_to_doctype` = 'Task' and `tabFile`.`attached_to_name` in ({_in_clause(tasks)}))")
 	for dt in ("Portal Meeting Note", "Portal Signoff", "Portal Weekly Update"):
@@ -140,14 +156,28 @@ def file_has_permission(doc, ptype, user):
 	projects = client_projects(user)
 	dt, dn = doc.attached_to_doctype, doc.attached_to_name
 	ok = False
-	if dt == "Project":
+	if not dt:
+		# file feedback yang masih "dititipkan" (belum ditautkan ke Issue): hanya pemiliknya
+		ok = doc.owner == user
+	elif dt == "Project":
 		ok = dn in projects
 	elif dt == "Task":
 		ok = bool(
 			frappe.db.get_value("Task", {"name": dn, "project": ["in", projects], "portal_visible": 1}, "name")
 		) if projects else False
+	elif dt == "Issue":
+		ok = bool(
+			frappe.db.get_value("Issue", {"name": dn, "project": ["in", projects], "portal_visible": 1}, "name")
+		) if projects else False
 	elif dt in ("Portal Meeting Note", "Portal Signoff", "Portal Weekly Update"):
 		ok = bool(frappe.db.get_value(dt, {"name": dn, "project": ["in", projects]}, "name")) if projects else False
+	return _client_doc_check(doc, ptype, user, ok)
+
+
+def issue_has_permission(doc, ptype, user):
+	if not is_client(user):
+		return None
+	ok = doc.project in client_projects(user) and bool(doc.get("portal_visible"))
 	return _client_doc_check(doc, ptype, user, ok)
 
 

@@ -18,6 +18,7 @@ permission_query_conditions = {
 	"Project": "portal_bridge.permissions.project_query",
 	"Task": "portal_bridge.permissions.task_query",
 	"File": "portal_bridge.permissions.file_query",
+	"Issue": "portal_bridge.permissions.issue_query",
 	"Portal Weekly Update": "portal_bridge.permissions.weekly_query",
 	"Portal Meeting Note": "portal_bridge.permissions.meeting_note_query",
 	"Portal Signoff": "portal_bridge.permissions.signoff_query",
@@ -30,6 +31,7 @@ has_permission = {
 	"Project": "portal_bridge.permissions.project_has_permission",
 	"Task": "portal_bridge.permissions.task_has_permission",
 	"File": "portal_bridge.permissions.file_has_permission",
+	"Issue": "portal_bridge.permissions.issue_has_permission",
 	"Portal Weekly Update": "portal_bridge.permissions.weekly_has_permission",
 	"Portal Meeting Note": "portal_bridge.permissions.meeting_note_has_permission",
 	"Portal Signoff": "portal_bridge.permissions.signoff_has_permission",
@@ -43,6 +45,10 @@ doc_events = {
 		"on_update": "portal_bridge.events.task_on_update",
 	},
 	"Customer": {"on_update": "portal_bridge.events.customer_on_update"},
+	"Issue": {
+		"on_update": "portal_bridge.events.issue_on_update",
+		"on_trash": "portal_bridge.events.issue_on_trash",
+	},
 	"Project": {"on_update": "portal_bridge.events.project_on_update"},
 }
 

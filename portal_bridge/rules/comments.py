@@ -19,6 +19,7 @@ def _ref_link(project: str, ref_doctype: str, ref_name: str, comment: str | None
 		"Portal Meeting Note": f"/{project}/meeting-notes/{ref_name}",
 		"Portal Signoff": f"/{project}/approvals/{ref_name}",
 		"Task": f"/{project}/tasks?task={ref_name}",
+		"Issue": f"/{project}/feedback/{ref_name}",
 	}.get(ref_doctype, f"/{project}/overview")
 	return f"{portal_url()}{path}" + (f"#komentar-{comment}" if comment else "")
 
@@ -44,7 +45,7 @@ def rule_16_add(project: str, ref_doctype: str, ref_name: str, section: str, bod
 	"""Komentar menempel pada section; utas = tanpa parent; maksimal satu tingkat balasan."""
 	if not (body or "").strip():
 		frappe.throw(_("Komentar kosong."), frappe.ValidationError)
-	if ref_doctype not in ("Portal Meeting Note", "Portal Signoff", "Task", "Portal Weekly Update"):
+	if ref_doctype not in ("Portal Meeting Note", "Portal Signoff", "Task", "Portal Weekly Update", "Issue"):
 		frappe.throw(_("Komentar tidak didukung untuk dokumen ini."), frappe.ValidationError)
 	if frappe.db.get_value(ref_doctype, ref_name, "project") != project:
 		frappe.throw(_("Dokumen bukan milik proyek ini."), frappe.PermissionError)
@@ -91,13 +92,19 @@ def _notify_thread(doc):
 	"""Komentar baru di utas: beri tahu penulis utas & peserta (ringkasan maks 1/jam lewat dedupe per jam)."""
 	actor = user_display(doc.author_user)["full_name"]
 	link = _ref_link(doc.project, doc.ref_doctype, doc.ref_name, doc.parent_comment or doc.name)
-	ref_title = frappe.db.get_value(doc.ref_doctype, doc.ref_name, "title" if doc.ref_doctype != "Task" else "subject") or doc.ref_name
+	title_field = "subject" if doc.ref_doctype in ("Task", "Issue") else "title"
+	ref_title = frappe.db.get_value(doc.ref_doctype, doc.ref_name, title_field) or doc.ref_name
 	participants = set()
 	if doc.parent_comment:
 		participants.add(frappe.db.get_value("Portal Comment", doc.parent_comment, "author_user"))
 		participants.update(frappe.get_all("Portal Comment", filters={"parent_comment": doc.parent_comment}, pluck="author_user"))
 	else:
 		participants.update(internal_pics(doc.project))
+	if doc.ref_doctype == "Issue":
+		# pelapor feedback selalu ikut diberi tahu
+		raised_by = frappe.db.get_value("Issue", doc.ref_name, "raised_by")
+		if raised_by and frappe.db.exists("User", raised_by):
+			participants.add(raised_by)
 	mentioned = {m.user for m in doc.mentions}
 	hour_key = now_datetime().strftime("%Y%m%d%H")
 	for u in participants - mentioned - {doc.author_user, None}:

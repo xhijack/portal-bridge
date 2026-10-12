@@ -50,3 +50,18 @@ def project_on_update(doc, method=None):
 			"""update `tabTask` set portal_visible = 1 where project = %s and status != 'Cancelled'""", doc.name
 		)
 	frappe.cache.delete_value(f"portal_summary:{doc.name}")
+
+
+def issue_on_update(doc, method=None):
+	"""Feedback portal: PIC mengubah status / menulis tanggapan di Desk → beri tahu klien pelapor."""
+	if not doc.get("portal_visible") or not doc.get("project"):
+		return
+	from portal_bridge.rules import feedback as fb
+
+	fb.on_issue_update(doc)
+
+
+def issue_on_trash(doc, method=None):
+	from portal_bridge.utils import cleanup_portal_links
+
+	cleanup_portal_links("Issue", doc.name)

@@ -83,6 +83,9 @@ def cleanup(prefix):
 	for p in frappe.get_all("Project", filters={"project_name": ["like", f"{prefix} %"]}, pluck="name"):
 		for dt in ("Portal Comment", "Portal Evidence", "Portal Notification", "Portal Audit Log"):
 			frappe.db.delete(dt, {"project": p})
+		for i in frappe.get_all("Issue", filters={"project": p}, pluck="name"):
+			frappe.db.delete("File", {"attached_to_doctype": "Issue", "attached_to_name": i})
+			frappe.delete_doc("Issue", i, ignore_permissions=True, force=True)
 		for dt in ("Portal Signoff", "Portal Meeting Note", "Portal Weekly Update"):
 			for n in frappe.get_all(dt, filters={"project": p}, pluck="name"):
 				d = frappe.get_doc(dt, n)

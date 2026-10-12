@@ -12,6 +12,12 @@ from portal_bridge.utils import portal_url, settings
 # Notifikasi yang tidak bisa dimatikan klien (aturan 29)
 MANDATORY = {"magic_link", "signoff_pending", "signoff_due", "task_overdue"}
 
+# Beberapa template berbagi satu tombol preferensi di profil
+PREF_GROUP = {
+	"feedback_new": "feedback", "feedback_replied": "feedback", "feedback_resolved": "feedback",
+	"feedback_reopened": "feedback", "feedback_closed": "feedback",
+}
+
 TEMPLATES = {
 	"id": {
 		"magic_link": ("Tautan masuk {product}", "Halo {name}, ini tautan masuk {product} Anda (berlaku {days} hari):\n{link}"),
@@ -29,9 +35,19 @@ TEMPLATES = {
 		"signoff_pending": ("Menunggu persetujuan: {title}", "{kind} \"{title}\" menunggu persetujuan Anda sampai {due}.\n{link}"),
 		"signoff_due": ("Besok batas persetujuan: {title}", "{kind} \"{title}\" jatuh tempo besok ({due}).\n{link}"),
 		"signoff_decided": ("{kind} {status}: {title}", "{actor} {status_text} {kind} \"{title}\".\n{link}"),
+		"feedback_new": ("{count} feedback baru · {project_name}", "{actor} mengirim {count} feedback untuk {project_name}: \"{subject}\"{more}\n{link}"),
+		"feedback_replied": ("Tanggapan feedback: {subject}", "Tim menanggapi feedback \"{subject}\" ({status_text}).\n{link}"),
+		"feedback_resolved": ("Feedback selesai, mohon konfirmasi: {subject}", "Feedback \"{subject}\" sudah ditangani. Buka portal untuk konfirmasi sudah sesuai atau buka kembali.\n{link}"),
+		"feedback_reopened": ("Feedback dibuka kembali: {subject}", "{actor} membuka kembali feedback \"{subject}\": \"{excerpt}\"\n{link}"),
+		"feedback_closed": ("Feedback ditutup klien: {subject}", "{actor} mengonfirmasi feedback \"{subject}\" sudah sesuai.\n{link}"),
 	},
 	"en": {
 		"magic_link": ("Your {product} sign-in link", "Hi {name}, here is your {product} sign-in link (valid {days} days):\n{link}"),
+		"feedback_new": ("{count} new feedback · {project_name}", "{actor} sent {count} feedback item(s) for {project_name}: \"{subject}\"{more}\n{link}"),
+		"feedback_replied": ("Feedback response: {subject}", "The team responded to feedback \"{subject}\" ({status_text}).\n{link}"),
+		"feedback_resolved": ("Feedback resolved, please confirm: {subject}", "Feedback \"{subject}\" has been handled. Open the portal to confirm or reopen it.\n{link}"),
+		"feedback_reopened": ("Feedback reopened: {subject}", "{actor} reopened feedback \"{subject}\": \"{excerpt}\"\n{link}"),
+		"feedback_closed": ("Feedback closed by client: {subject}", "{actor} confirmed feedback \"{subject}\" is resolved.\n{link}"),
 	},
 }
 
@@ -86,7 +102,7 @@ def enqueue(user: str, template: str, context: dict, project: str | None = None,
 	"""Masukkan satu notifikasi ke antrean. Mengembalikan nama dokumen atau None bila dilewati."""
 	if not user or user in ("Guest", "Administrator"):
 		return None
-	if template not in MANDATORY and not force and user_prefs(user).get(template) is False:
+	if template not in MANDATORY and not force and user_prefs(user).get(PREF_GROUP.get(template, template)) is False:
 		return None
 	if dedupe_key and frappe.db.exists("Portal Notification", {"dedupe_key": dedupe_key, "status": ["in", ["Queued", "Sent"]]}):
 		return None
