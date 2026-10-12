@@ -71,12 +71,33 @@ class TestFeedback(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			api.create_feedback(self.w.proj_a, [{"subject": "x", "kind": "lainnya"}])
 
+	# kebijakan unggah mengikuti System Settings (Allowed File Extensions; kosong = semua tipe)
+	def test_upload_policy_follows_system_settings(self):
+		frappe.set_user("Administrator")
+		prev = frappe.db.get_single_value("System Settings", "allowed_file_extensions")
+		try:
+			frappe.db.set_single_value("System Settings", "allowed_file_extensions", "png\nPDF\n")
+			frappe.clear_document_cache("System Settings", "System Settings")
+			self.assertEqual(fb.upload_policy()["extensions"], ["pdf", "png"])
+			frappe.set_user(self.w.a1)
+			fb.stage_file("ok.png", PNG)
+			with self.assertRaises(frappe.ValidationError):
+				fb.stage_file("tolak.exe", b"x")
+			frappe.set_user("Administrator")
+			frappe.db.set_single_value("System Settings", "allowed_file_extensions", "")
+			frappe.clear_document_cache("System Settings", "System Settings")
+			self.assertIsNone(fb.upload_policy()["extensions"])
+			frappe.set_user(self.w.a1)
+			fb.stage_file("bebas.xyz", b"x")  # kosong = semua tipe, seperti Desk
+		finally:
+			frappe.set_user("Administrator")
+			frappe.db.set_single_value("System Settings", "allowed_file_extensions", prev)
+			frappe.clear_document_cache("System Settings", "System Settings")
+
 	# F2: file titipan hanya milik pengunggah
 	def test_staged_file_belongs_to_uploader(self):
 		frappe.set_user(self.w.a1)
 		staged = fb.stage_file("bukti.png", PNG)
-		with self.assertRaises(frappe.ValidationError):
-			fb.stage_file("virus.exe", b"x")
 		frappe.set_user(self.w.a2)
 		with self.assertRaises(frappe.PermissionError):
 			api.create_feedback(self.w.proj_a, [{"subject": "pakai file orang", "files": [staged.name]}])

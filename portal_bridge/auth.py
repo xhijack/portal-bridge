@@ -188,7 +188,10 @@ def me():
 			}
 		)
 	notif_pref = frappe.db.get_value("User", user, "portal_notif_pref")
+	from portal_bridge.rules.feedback import upload_policy
+
 	return {
+		"upload": upload_policy(),
 		"user": user_display(user),
 		"role": "klien" if is_client(user) else ("internal" if is_internal(user) else "none"),
 		"mobile_no": frappe.db.get_value("User", user, "mobile_no"),

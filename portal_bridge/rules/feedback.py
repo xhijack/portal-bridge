@@ -25,10 +25,17 @@ from portal_bridge.utils import audit, internal_pics, is_client, is_internal, po
 KINDS = FEEDBACK_ISSUE_TYPES
 KIND_BY_TYPE = {v: k for k, v in KINDS.items()}
 STATUSES = ("Open", "Replied", "On Hold", "Resolved", "Closed")
-IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
-ALLOWED_EXT = IMAGE_EXT | {"csv", "xlsx", "xls", "pdf", "docx", "txt", "mp4"}
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"}
 MAX_BATCH = 50
+
+
+def upload_policy() -> dict:
+	"""Mengikuti System Settings Frappe: Allowed File Extensions (kosong = semua tipe) dan Max File Size (MB)."""
+	from frappe.core.api.file import get_max_file_size
+
+	raw = frappe.get_system_settings("allowed_file_extensions") or ""
+	exts = sorted({e.strip().lower().lstrip(".") for e in raw.splitlines() if e.strip()})
+	return {"extensions": exts or None, "max_bytes": get_max_file_size()}
 
 FIELDS = [
 	"name", "subject", "status", "issue_type", "priority", "opening_date", "raised_by", "description", "resolution_details",
@@ -156,10 +163,11 @@ def stage_file(filename: str, content: bytes, issue: str | None = None):
 	"""Simpan file privat. Tanpa `issue` → dititipkan (attached_to kosong) sampai feedback dikirim."""
 	filename = frappe.utils.sanitize_html(filename or "file")
 	ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-	if ext not in ALLOWED_EXT:
-		frappe.throw(_("Tipe file tidak diizinkan. Gunakan: {0}.").format(", ".join(sorted(ALLOWED_EXT))), frappe.ValidationError)
-	if len(content) > MAX_UPLOAD_BYTES:
-		frappe.throw(_("Ukuran file maksimal 25 MB."), frappe.ValidationError)
+	policy = upload_policy()
+	if policy["extensions"] is not None and ext not in policy["extensions"]:
+		frappe.throw(_("Tipe file .{0} tidak diizinkan. Gunakan: {1}.").format(ext, ", ".join(policy["extensions"])), frappe.ValidationError)
+	if len(content) > policy["max_bytes"]:
+		frappe.throw(_("Ukuran file maksimal {0} MB.").format(policy["max_bytes"] // (1024 * 1024)), frappe.ValidationError)
 	if issue:
 		row = frappe.db.get_value("Issue", issue, ["project", "raised_by", "status", "portal_visible"], as_dict=True)
 		if not row or not row.portal_visible:
