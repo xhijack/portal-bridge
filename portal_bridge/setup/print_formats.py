@@ -82,6 +82,7 @@ MEETING_NOTE_HTML = (
 <h2>Pembahasan</h2>
 {% for t in doc.topics %}
 <p><strong>{{ t.seq or loop.index }}. {{ t.title }}</strong><br>{{ t.body or "" }}</p>
+{% if t.resolution %}<div class="box"><strong>Solusi:</strong> {{ t.resolution }}</div>{% endif %}
 {% endfor %}
 
 <h2>Keputusan &amp; risiko</h2>

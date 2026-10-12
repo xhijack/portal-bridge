@@ -25,7 +25,7 @@ Satu site Frappe = satu tenant. Spesifikasi produk: `~/frontends/sopwer-portal/d
 - `evidence.py` — PDF via Print Format + SHA-256 → File privat `portal_visible=1` + `Portal Evidence`
 - `tasks.py` — scheduler: `send_notifications` (*/5 menit), `remind_client_tasks` (tiap jam, kirim pada `reminder_hour`), `draft_weekly` (Jumat 09:00), `close_confirmations`, `signoff_due_reminders` (harian)
 - `events.py` — Task `before_save`: tipe Klien / milestone → `portal_visible=1`; Issue `on_update` → notifikasi feedback ke pelapor, `on_trash` → bersihkan komentar/audit tertaut
-- `portal_bridge/doctype/` — 17 DocType (`Portal Bridge Settings` [Single], `Portal Magic Link`, `Portal Audit Log`, `Portal Notification`, `Portal Evidence`, `Portal Weekly Update`, `Portal Meeting Note`, `Portal Comment`, `Portal Signoff` [submittable] + child table). JSON dihasilkan sekali dari generator; sekarang **edit JSON langsung** (atau lewat Desk dengan developer_mode lalu export)
+- `portal_bridge/doctype/` — 17 DocType (`Portal Meeting Topic` punya `resolution` "Solusi / Jawaban": solusi pembahasan ditulis langsung di baris topiknya, tampil di bawah pembahasan di portal dan PDF, bukan dikumpulkan di Keputusan) (`Portal Bridge Settings` [Single], `Portal Magic Link`, `Portal Audit Log`, `Portal Notification`, `Portal Evidence`, `Portal Weekly Update`, `Portal Meeting Note`, `Portal Comment`, `Portal Signoff` [submittable] + child table). JSON dihasilkan sekali dari generator; sekarang **edit JSON langsung** (atau lewat Desk dengan developer_mode lalu export)
 - `demo.py` — data pilot sesuai mock `docs/design/Rencana.html`
 - `tests/` — `factory.py` (2 tenant-klien × project), `test_auth.py`, `test_permissions.py`, `test_rules.py`, `test_feedback.py`
 

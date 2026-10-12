@@ -513,7 +513,7 @@ def meeting_note(name: str):
 		"confirmed_on": doc.confirmed_on, "pdf_file": doc.pdf_file, "pdf_hash": doc.pdf_hash,
 		"attendees": [{"user": a.user, "full_name": a.full_name or (frappe.utils.get_fullname(a.user) if a.user else None),
 		               "role": a.role, "side": a.side, "present": bool(a.present)} for a in doc.attendees],
-		"topics": [{"seq": t.seq or i, "title": t.title, "body": t.body} for i, t in enumerate(doc.topics, start=1)],
+		"topics": [{"seq": t.seq or i, "title": t.title, "body": t.body, "resolution": t.get("resolution")} for i, t in enumerate(doc.topics, start=1)],
 		"decisions": [{"code": d.code, "kind": d.kind, "body": d.body, "proposed_by": d.proposed_by, "approved_by": d.approved_by,
 		               "status": d.status, "review_date": d.review_date} for d in doc.decisions],
 		"actions": [{"body": a.body, "assignee": user_display(a.assignee) if a.assignee else None, "due": a.due, "task": a.task,

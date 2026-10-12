@@ -60,12 +60,13 @@ class TestRules(FrappeTestCase):
 		note = frappe.get_doc(
 			{
 				"doctype": "Portal Meeting Note", "project": self.w.proj_a, "title": "Rapat uji", "meeting_date": nowdate(),
-				"topics": [{"title": "Topik 1", "body": "isi"}],
+				"topics": [{"title": "Topik 1", "body": "isi", "resolution": "<p>sudah dijawab</p>"}],
 				"actions": [{"body": "Kirim data X", "assignee": self.w.a2, "due": add_days(nowdate(), 7)},
 				            {"body": "Siapkan server", "assignee": self.w.pic, "due": add_days(nowdate(), 3)}],
 			}
 		).insert(ignore_permissions=True)
 		self.assertEqual(note.seq, 1)
+		self.assertEqual(note.topics[0].resolution, "<p>sudah dijawab</p>")
 		note.status = "Sent"
 		note.save(ignore_permissions=True)
 		note.reload()
