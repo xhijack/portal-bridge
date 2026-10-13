@@ -74,6 +74,10 @@ def rule_16_add(project: str, ref_doctype: str, ref_name: str, section: str, bod
 	doc.insert(ignore_permissions=True)
 	rule_17_notify_mentions(doc)
 	_notify_thread(doc)
+	if ref_doctype == "Issue":
+		from portal_bridge.rules.feedback import on_comment_added
+
+		on_comment_added(doc)
 	audit("comment_add", project, ref_doctype, ref_name, {"comment": doc.name, "section": section})
 	return doc
 

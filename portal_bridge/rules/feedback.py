@@ -39,7 +39,7 @@ def upload_policy() -> dict:
 
 FIELDS = [
 	"name", "subject", "status", "issue_type", "priority", "opening_date", "raised_by", "description", "resolution_details",
-	"portal_task", "project", "creation", "modified", "first_responded_on",
+	"portal_task", "project", "creation", "modified", "modified_by", "first_responded_on",
 ]
 
 
@@ -90,14 +90,58 @@ def _raised_by_display(user: str | None) -> dict:
 	return memo[user]
 
 
+def _activity(names: list[str], user: str) -> dict[str, dict]:
+	"""Per Issue: jumlah komentar, utas terbuka, komentar terakhir (siapa/sisi/kapan/kutipan), dan waktu terakhir user membukanya."""
+	out: dict[str, dict] = {n: {"total": 0, "open": 0, "last": None, "last_view": None} for n in names}
+	if not names:
+		return out
+	rows = frappe.get_all(
+		"Portal Comment", filters={"ref_doctype": "Issue", "ref_name": ["in", names]},
+		fields=["ref_name", "author_user", "creation", "body", "parent_comment", "status"], order_by="creation asc",
+	)
+	for c in rows:
+		a = out[c.ref_name]
+		a["total"] += 1
+		if not c.parent_comment and c.status == "Open":
+			a["open"] += 1
+		a["last"] = c  # terurut naik → yang terakhir menang
+	for v in frappe.get_all(
+		"Portal Audit Log", filters={"user": user, "action": "feedback_view", "ref_doctype": "Issue", "ref_name": ["in", names]},
+		fields=["ref_name", "max(creation) as last_view"], group_by="ref_name",
+	):
+		if v.ref_name in out:
+			out[v.ref_name]["last_view"] = v.last_view
+	return out
+
+
 def serialize(row, files: list[dict], open_comments: int, user: str | None = None, *, internal: bool | None = None,
-              tasks: dict[str, dict] | None = None) -> dict:
+              tasks: dict[str, dict] | None = None, activity: dict | None = None) -> dict:
 	user = user or frappe.session.user
 	mine = row.raised_by == user
 	if internal is None:
 		internal = is_internal(user)
 	if tasks is None:
 		tasks = _task_labels([row.portal_task])
+	act = activity or {"total": 0, "open": open_comments, "last": None, "last_view": None}
+	last = act.get("last")
+	last_comment = None
+	awaiting = None  # "team" = komentar terakhir dari klien belum dijawab tim; "client" = tim bertanya, menunggu klien
+	if last is not None:
+		who = _raised_by_display(last.author_user)
+		from portal_bridge.rules.comments import plain_text
+
+		last_comment = {"author": who, "created_at": last.creation, "excerpt": plain_text(last.body)[:120]}
+		awaiting = "team" if who["side"] == "klien" else "client"
+	elif row.status == "Open":
+		awaiting = "team"
+	# pembaruan yang belum dibuka user ini: perubahan oleh orang lain setelah terakhir kali dibuka
+	events = []
+	if last is not None and last.author_user != user:
+		events.append(last.creation)
+	if row.modified_by != user:
+		events.append(row.modified)
+	latest = max(events) if events else None
+	has_update = bool(latest) and (act.get("last_view") is None or latest > act["last_view"])
 	return {
 		"name": row.name,
 		"subject": row.subject,
@@ -114,7 +158,11 @@ def serialize(row, files: list[dict], open_comments: int, user: str | None = Non
 		"created_at": row.creation,
 		"modified": row.modified,
 		"attachments": files,
-		"open_comments": open_comments,
+		"open_comments": act.get("open", open_comments),
+		"comments_total": act.get("total", 0),
+		"last_comment": last_comment,
+		"awaiting": awaiting,
+		"has_update": has_update,
 		"mine": mine,
 		"can_edit": internal or (mine and row.status == "Open"),
 		"can_close": row.status == "Resolved",
@@ -128,23 +176,19 @@ def list_rows(project: str, status: str | None = None, user: str | None = None) 
 	rows = frappe.get_all("Issue", filters=filters, fields=FIELDS, order_by="opening_date desc, creation desc")
 	names = [r.name for r in rows]
 	files = _attachments(names)
-	open_counts = {}
-	if names:
-		for c in frappe.get_all(
-			"Portal Comment",
-			filters={"ref_doctype": "Issue", "ref_name": ["in", names], "parent_comment": ["in", ["", None]], "status": "Open"},
-			fields=["ref_name"],
-		):
-			open_counts[c.ref_name] = open_counts.get(c.ref_name, 0) + 1
+	activity = _activity(names, user)
 	internal = is_internal(user)
 	tasks = _task_labels([r.portal_task for r in rows])
-	items = [serialize(r, files.get(r.name, []), open_counts.get(r.name, 0), user, internal=internal, tasks=tasks) for r in rows]
+	items = [serialize(r, files.get(r.name, []), activity[r.name]["open"], user, internal=internal, tasks=tasks, activity=activity[r.name])
+	         for r in rows]
 	counts = {s: 0 for s in STATUSES}
 	for it in items:
 		counts[it["status"]] = counts.get(it["status"], 0) + 1
 	counts["all"] = len(items)
 	counts["open"] = counts["Open"] + counts["Replied"] + counts["On Hold"]
 	counts["needs_you"] = counts["Resolved"]
+	counts["unanswered"] = sum(1 for i in items if i["awaiting"] == "team" and i["status"] not in ("Resolved", "Closed"))
+	counts["updates"] = sum(1 for i in items if i["has_update"])
 	if status == "open":
 		items = [i for i in items if i["status"] in ("Open", "Replied", "On Hold")]
 	elif status == "needs_you":
@@ -159,7 +203,8 @@ def detail(name: str, user: str | None = None) -> dict:
 	if not row:
 		frappe.throw(_("Feedback tidak ditemukan."), frappe.DoesNotExistError)
 	files = _attachments([name]).get(name, [])
-	d = serialize(row, files, cm.open_counts("Issue", name).get("__open__", 0), user)
+	activity = _activity([name], user or frappe.session.user)[name]
+	d = serialize(row, files, activity["open"], user, activity=activity)
 	d["project"] = row.project
 	d["comments"] = cm.threads("Issue", name)
 	# mentionables tidak dikirim di sini: frontend memakai project_members (cache 5 menit)
@@ -395,4 +440,21 @@ def on_issue_update(doc):
 		notify.enqueue(to, "feedback_resolved", ctx, doc.project, dedupe_key=f"feedback_resolved:{doc.name}:{hour}")
 	elif doc.status in ("Replied", "On Hold", "Open") or resolution_changed:
 		notify.enqueue(to, "feedback_replied", ctx, doc.project, dedupe_key=f"feedback_replied:{doc.name}:{hour}")
+	frappe.cache.delete_value(f"portal_summary:{doc.project}")
+
+
+def on_comment_added(doc):
+	"""Status Issue mengikuti percakapan (seperti Communication di ERPNext): tim berkomentar saat Open → Replied;
+	klien berkomentar saat Replied → Open. Lewat db.set_value agar tidak memicu notifikasi status ke klien (komentar sudah bernotifikasi)."""
+	row = frappe.db.get_value("Issue", doc.ref_name, ["status", "first_responded_on", "portal_visible"], as_dict=True)
+	if not row or not row.portal_visible:
+		return
+	author_internal = not is_client(doc.author_user)
+	if author_internal and row.status == "Open":
+		values = {"status": "Replied"}
+		if not row.first_responded_on:
+			values["first_responded_on"] = now_datetime()
+		frappe.db.set_value("Issue", doc.ref_name, values)
+	elif not author_internal and row.status == "Replied":
+		frappe.db.set_value("Issue", doc.ref_name, "status", "Open")
 	frappe.cache.delete_value(f"portal_summary:{doc.project}")

@@ -179,15 +179,30 @@ class TestFeedback(FrappeTestCase):
 		self.assertTrue(frappe.db.exists("Portal Notification", {"user": self.w.pic, "template": "feedback_closed"}))
 		self.assertEqual(api.feedback(self.w.proj_a, status="done")["items"][0]["status"], "Closed")
 
-	# komentar di Issue + badge
+	# komentar di Issue + badge + status ikut percakapan + penanda aktivitas
 	def test_comments_and_summary_count(self):
 		name = self._create(self.w.a1, self.w.proj_a, [{"subject": "pertanyaan"}])[0]
+		frappe.set_user(self.w.a1)
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertEqual((row["awaiting"], row["last_comment"], row["has_update"]), ("team", None, False))  # buatan sendiri, belum ada komentar
 		frappe.set_user(self.w.pic)
 		c = api.add_comment(self.w.proj_a, "Issue", name, "Bisa dijelaskan lebih detail?")
 		self.assertEqual(c["section"], "all")
 		self.assertTrue(frappe.db.exists("Portal Notification", {"user": self.w.a1, "template": "comment_new"}))
+		self.assertEqual(frappe.db.get_value("Issue", name, "status"), "Replied")  # tim menanggapi → Replied
 		frappe.set_user(self.w.a1)
-		self.assertEqual(api.feedback_item(name)["open_comments"], 1)
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertEqual((row["awaiting"], row["has_update"], row["last_comment"]["author"]["side"]), ("client", True, "internal"))
+		self.assertEqual(api.feedback_item(name)["open_comments"], 1)  # membuka detail = sudah dilihat
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertFalse(row["has_update"])
+		api.add_comment(self.w.proj_a, "Issue", name, "Sudah, di layar PO.")
+		self.assertEqual(frappe.db.get_value("Issue", name, "status"), "Open")  # klien membalas → kembali Open
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertEqual(row["awaiting"], "team")
+		data = api.feedback(self.w.proj_a)
+		self.assertIn(name, [i["name"] for i in data["items"] if i["awaiting"] == "team"])
+		self.assertGreaterEqual(data["counts"]["unanswered"], 1)
 		self.assertEqual(api.summary(self.w.proj_a)["counts"]["feedback"], 0)
 		frappe.set_user("Administrator")
 		doc = frappe.get_doc("Issue", name)
