@@ -41,9 +41,11 @@ def parse_mentions(body: str, project: str, explicit: list[str] | None = None) -
 
 
 def rule_16_add(project: str, ref_doctype: str, ref_name: str, section: str, body: str, parent: str | None = None,
-                mentions: list[str] | None = None):
-	"""Komentar menempel pada section; utas = tanpa parent; maksimal satu tingkat balasan."""
-	if not (body or "").strip():
+                mentions: list[str] | None = None, files: list[str] | None = None):
+	"""Komentar menempel pada section; utas = tanpa parent; maksimal satu tingkat balasan.
+	`files`: File titipan (diunggah lewat api.upload_attachment) yang ditautkan ke komentar ini."""
+	files = [f for f in (files or []) if f]
+	if not (body or "").strip() and not files:
 		frappe.throw(_("Komentar kosong."), frappe.ValidationError)
 	if ref_doctype not in ("Portal Meeting Note", "Portal Signoff", "Task", "Portal Weekly Update", "Issue"):
 		frappe.throw(_("Komentar tidak didukung untuk dokumen ini."), frappe.ValidationError)
@@ -66,19 +68,23 @@ def rule_16_add(project: str, ref_doctype: str, ref_name: str, section: str, bod
 			"section": section or "all",
 			"parent_comment": parent,
 			"author_user": frappe.session.user,
-			"body": body.strip(),
+			"body": (body or "").strip(),
 			"status": "Open",
 			"mentions": [{"user": u} for u in mention_users],
 		}
 	)
 	doc.insert(ignore_permissions=True)
+	if files:
+		from portal_bridge.rules.feedback import _claim_staged
+
+		_claim_staged(files, doc.name, frappe.session.user, doctype="Portal Comment")
 	rule_17_notify_mentions(doc)
 	_notify_thread(doc)
 	if ref_doctype == "Issue":
 		from portal_bridge.rules.feedback import on_comment_added
 
 		on_comment_added(doc)
-	audit("comment_add", project, ref_doctype, ref_name, {"comment": doc.name, "section": section})
+	audit("comment_add", project, ref_doctype, ref_name, {"comment": doc.name, "section": section, "files": len(files)})
 	return doc
 
 
@@ -88,7 +94,7 @@ def rule_17_notify_mentions(doc):
 	for m in doc.mentions:
 		if m.user == doc.author_user:
 			continue
-		notify.enqueue(m.user, "mention", {"actor": actor, "excerpt": plain_text(doc.body)[:120], "link": link}, doc.project,
+		notify.enqueue(m.user, "mention", {"actor": actor, "excerpt": (plain_text(doc.body) or "📎")[:120], "link": link}, doc.project,
 		               dedupe_key=f"mention:{doc.name}:{m.user}")
 
 
@@ -112,7 +118,7 @@ def _notify_thread(doc):
 	mentioned = {m.user for m in doc.mentions}
 	hour_key = now_datetime().strftime("%Y%m%d%H")
 	for u in participants - mentioned - {doc.author_user, None}:
-		notify.enqueue(u, "comment_new", {"actor": actor, "excerpt": plain_text(doc.body)[:120], "ref_title": ref_title, "link": link},
+		notify.enqueue(u, "comment_new", {"actor": actor, "excerpt": (plain_text(doc.body) or "📎")[:120], "ref_title": ref_title, "link": link},
 		               doc.project, dedupe_key=f"thread:{doc.ref_name}:{u}:{hour_key}")
 
 
@@ -177,7 +183,20 @@ def serialize(c, counts_only=False) -> dict:
 		"resolved_by": c.resolved_by,
 		"applied_version": c.applied_version,
 		"mentions": [m.user for m in c.get("mentions", [])] if hasattr(c, "get") else [],
+		"attachments": _comment_files([c.name]).get(c.name, []) if not counts_only else [],
 	}
+
+
+def _comment_files(names: list[str]) -> dict[str, list[dict]]:
+	if not names:
+		return {}
+	from portal_bridge.rules.feedback import _file_row
+
+	out: dict[str, list[dict]] = {}
+	for f in frappe.get_all("File", filters={"attached_to_doctype": "Portal Comment", "attached_to_name": ["in", names]},
+	                        fields=["name", "file_name", "file_url", "file_size", "attached_to_name"], order_by="creation asc"):
+		out.setdefault(f.attached_to_name, []).append(_file_row(f))
+	return out
 
 
 def threads(ref_doctype: str, ref_name: str) -> list[dict]:
@@ -192,9 +211,11 @@ def threads(ref_doctype: str, ref_name: str) -> list[dict]:
 	if rows:
 		for m in frappe.get_all("Portal Comment Mention", filters={"parent": ["in", [r.name for r in rows]]}, fields=["parent", "user"]):
 			mentions.setdefault(m.parent, []).append(m.user)
+	files = _comment_files([r.name for r in rows])
 	by_name = {}
 	for r in rows:
-		d = serialize(r)
+		d = serialize(r, counts_only=True)
+		d["attachments"] = files.get(r.name, [])
 		d["mentions"] = mentions.get(r.name, [])
 		d["replies"] = []
 		by_name[r.name] = d

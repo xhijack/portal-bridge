@@ -556,13 +556,28 @@ def comments(ref_doctype: str, ref_name: str):
 
 
 @frappe.whitelist(methods=["POST"])
-def add_comment(project: str, ref_doctype: str, ref_name: str, body: str, section: str = "all", parent: str | None = None,
-                mentions=None):
+def add_comment(project: str, ref_doctype: str, ref_name: str, body: str = "", section: str = "all", parent: str | None = None,
+                mentions=None, files=None):
 	project = require_access(project)
 	if isinstance(mentions, str):
 		mentions = frappe.parse_json(mentions) if mentions else []
-	doc = cm.rule_16_add(project, ref_doctype, ref_name, section, body, parent, mentions)
+	if isinstance(files, str):
+		files = frappe.parse_json(files) if files else []
+	doc = cm.rule_16_add(project, ref_doctype, ref_name, section, body, parent, mentions, files)
 	return cm.serialize(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def upload_attachment():
+	"""Unggah file titipan (multipart 'file') untuk komentar/feedback; kirim File.name di add_comment.files / create_feedback.files.
+	Tipe & ukuran mengikuti System Settings."""
+	require_login()
+	files = frappe.request.files if getattr(frappe, "request", None) else None
+	if not files or "file" not in files:
+		frappe.throw(_("Tidak ada file."), frappe.ValidationError)
+	f = files["file"]
+	file_doc = fb.stage_file(f.filename or "file", f.stream.read(), None)
+	return {"ok": True, "file": fb._file_row(file_doc)}
 
 
 @frappe.whitelist(methods=["POST"])

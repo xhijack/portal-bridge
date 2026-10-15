@@ -259,15 +259,15 @@ def stage_file(filename: str, content: bytes, issue: str | None = None):
 	return file_doc
 
 
-def _claim_staged(file_names: list[str], issue: str, user: str):
-	"""Tautkan file titipan ke Issue; hanya file milik user yang belum punya induk."""
+def _claim_staged(file_names: list[str], issue: str, user: str, doctype: str = "Issue"):
+	"""Tautkan file titipan ke dokumen (Issue / Portal Comment); hanya file milik user yang belum punya induk."""
 	for fname in file_names or []:
 		f = frappe.db.get_value("File", fname, ["owner", "attached_to_doctype", "attached_to_name"], as_dict=True)
 		if not f:
 			frappe.throw(_("File {0} tidak ditemukan.").format(fname), frappe.DoesNotExistError)
 		if f.owner != user or f.attached_to_doctype:
 			frappe.throw(_("File {0} bukan milik Anda atau sudah dipakai.").format(fname), frappe.PermissionError)
-		frappe.db.set_value("File", fname, {"attached_to_doctype": "Issue", "attached_to_name": issue}, update_modified=False)
+		frappe.db.set_value("File", fname, {"attached_to_doctype": doctype, "attached_to_name": issue}, update_modified=False)
 
 
 # ---------------------------------------------------------------- F1: buat

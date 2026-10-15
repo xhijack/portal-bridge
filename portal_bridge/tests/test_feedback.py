@@ -211,3 +211,24 @@ class TestFeedback(FrappeTestCase):
 		frappe.cache.delete_value(f"portal_summary:{self.w.proj_a}")
 		frappe.set_user(self.w.a1)
 		self.assertEqual(api.summary(self.w.proj_a)["counts"]["feedback"], 1)
+
+	# lampiran pada komentar: file titipan ditautkan ke Portal Comment, ikut di threads, klien lain proyek tak bisa baca
+	def test_comment_attachments(self):
+		name = self._create(self.w.a1, self.w.proj_a, [{"subject": "ada lampiran di komentar"}])[0]
+		frappe.set_user(self.w.a1)
+		staged = fb.stage_file("bukti-komentar.png", PNG)
+		c = api.add_comment(self.w.proj_a, "Issue", name, "", files=[staged.name])  # boleh tanpa teks bila ada file
+		self.assertEqual(len(c["attachments"]), 1)
+		f = frappe.db.get_value("File", staged.name, ["attached_to_doctype", "attached_to_name"], as_dict=True)
+		self.assertEqual((f.attached_to_doctype, f.attached_to_name), ("Portal Comment", c["name"]))
+		th = api.feedback_item(name)["comments"]
+		self.assertEqual(th[0]["attachments"][0]["name"], staged.name)
+		self.assertTrue(frappe.has_permission("File", "read", staged.name, user=self.w.a2))
+		self.assertFalse(frappe.has_permission("File", "read", staged.name, user=self.w.b1))
+		frappe.set_user(self.w.a2)
+		other = fb.stage_file("x.png", PNG)
+		frappe.set_user(self.w.a1)
+		with self.assertRaises(frappe.PermissionError):
+			api.add_comment(self.w.proj_a, "Issue", name, "pakai file orang", files=[other.name])
+		with self.assertRaises(frappe.ValidationError):
+			api.add_comment(self.w.proj_a, "Issue", name, "  ")
