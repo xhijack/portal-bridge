@@ -97,14 +97,20 @@ def _activity(names: list[str], user: str) -> dict[str, dict]:
 		return out
 	rows = frappe.get_all(
 		"Portal Comment", filters={"ref_doctype": "Issue", "ref_name": ["in", names]},
-		fields=["ref_name", "author_user", "creation", "body", "parent_comment", "status"], order_by="creation asc",
+		fields=["name", "ref_name", "author_user", "creation", "body", "parent_comment", "status"], order_by="creation asc",
 	)
+	root_status = {c.name: c.status for c in rows if not c.parent_comment}
 	for c in rows:
 		a = out[c.ref_name]
 		a["total"] += 1
 		if not c.parent_comment and c.status == "Open":
 			a["open"] += 1
 		a["last"] = c  # terurut naik → yang terakhir menang
+		# komentar di utas yang sudah ditandai terjawab tidak dihitung untuk "giliran siapa"
+		if root_status.get(c.parent_comment or c.name) == "Open":
+			a["last_open"] = c
+		if not is_client(c.author_user):
+			a["team_replied"] = True
 	for v in frappe.get_all(
 		"Portal Audit Log", filters={"user": user, "action": "feedback_view", "ref_doctype": "Issue", "ref_name": ["in", names]},
 		fields=["ref_name", "max(creation) as last_view"], group_by="ref_name",
@@ -130,10 +136,12 @@ def serialize(row, files: list[dict], open_comments: int, user: str | None = Non
 		who = _raised_by_display(last.author_user)
 		from portal_bridge.rules.comments import plain_text
 
-		last_comment = {"author": who, "created_at": last.creation, "excerpt": plain_text(last.body)[:120]}
-		awaiting = "team" if who["side"] == "klien" else "client"
-	elif row.status == "Open":
-		awaiting = "team"
+		last_comment = {"author": who, "created_at": last.creation, "excerpt": (plain_text(last.body) or "📎")[:120]}
+	last_open = act.get("last_open")
+	if last_open is not None:
+		awaiting = "team" if _raised_by_display(last_open.author_user)["side"] == "klien" else "client"
+	elif row.status == "Open" and not act.get("team_replied"):
+		awaiting = "team"  # belum ada tanggapan tim sama sekali
 	# pembaruan yang belum dibuka user ini: perubahan oleh orang lain setelah terakhir kali dibuka
 	events = []
 	if last is not None and last.author_user != user:
@@ -441,6 +449,20 @@ def on_issue_update(doc):
 	elif doc.status in ("Replied", "On Hold", "Open") or resolution_changed:
 		notify.enqueue(to, "feedback_replied", ctx, doc.project, dedupe_key=f"feedback_replied:{doc.name}:{hour}")
 	frappe.cache.delete_value(f"portal_summary:{doc.project}")
+
+
+def on_thread_resolved(doc):
+	"""Utas komentar ditandai terjawab: bila tak ada utas terbuka lagi dan tim pernah menanggapi, status Open (akibat balasan klien)
+	kembali ke Replied. Feedback tidak ditutup otomatis; penutupan tetap lewat Resolved (tim) → Sudah sesuai (klien)."""
+	row = frappe.db.get_value("Issue", doc.ref_name, ["status", "portal_visible"], as_dict=True)
+	if not row or not row.portal_visible or row.status != "Open":
+		return
+	if frappe.db.exists("Portal Comment", {"ref_doctype": "Issue", "ref_name": doc.ref_name, "parent_comment": ["in", ["", None]], "status": "Open"}):
+		return
+	authors = frappe.get_all("Portal Comment", filters={"ref_doctype": "Issue", "ref_name": doc.ref_name}, pluck="author_user")
+	if any(not is_client(a) for a in set(authors)):
+		frappe.db.set_value("Issue", doc.ref_name, "status", "Replied")
+		frappe.cache.delete_value(f"portal_summary:{doc.project}")
 
 
 def on_comment_added(doc):

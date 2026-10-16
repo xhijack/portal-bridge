@@ -128,13 +128,18 @@ def rule_18_resolve(name: str):
 	if doc.parent_comment:
 		frappe.throw(_("Tandai selesai pada utas utamanya."), frappe.ValidationError)
 	user = frappe.session.user
-	if is_client(user) and doc.author_user != user:
-		frappe.throw(_("Hanya penulis utas atau tim penyedia jasa yang bisa menandai selesai."), frappe.PermissionError)
+	owner_of_feedback = doc.ref_doctype == "Issue" and frappe.db.get_value("Issue", doc.ref_name, "raised_by") == user
+	if is_client(user) and doc.author_user != user and not owner_of_feedback:
+		frappe.throw(_("Hanya penulis utas, pelapor feedback, atau tim penyedia jasa yang bisa menandai terjawab."), frappe.PermissionError)
 	doc.status = "Resolved"
 	doc.resolved_by = user
 	doc.resolved_on = now_datetime()
 	doc.save(ignore_permissions=True)
 	audit("comment_resolve", doc.project, "Portal Comment", name)
+	if doc.ref_doctype == "Issue":
+		from portal_bridge.rules.feedback import on_thread_resolved
+
+		on_thread_resolved(doc)
 	return doc
 
 

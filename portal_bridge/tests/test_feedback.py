@@ -232,3 +232,27 @@ class TestFeedback(FrappeTestCase):
 			api.add_comment(self.w.proj_a, "Issue", name, "pakai file orang", files=[other.name])
 		with self.assertRaises(frappe.ValidationError):
 			api.add_comment(self.w.proj_a, "Issue", name, "  ")
+
+	# utas ditandai terjawab oleh klien → tidak lagi "menunggu tim"; status kembali Replied; feedback tidak tertutup
+	def test_resolve_thread_clears_awaiting_team(self):
+		name = self._create(self.w.a1, self.w.proj_a, [{"subject": "tanya alur retur"}])[0]
+		frappe.set_user(self.w.pic)
+		root = api.add_comment(self.w.proj_a, "Issue", name, "Returnya dari gudang mana?")
+		frappe.set_user(self.w.a1)
+		api.add_comment(self.w.proj_a, "Issue", name, "Gudang A, terima kasih, sudah jelas.", parent=root["name"])
+		self.assertEqual(frappe.db.get_value("Issue", name, "status"), "Open")
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertEqual(row["awaiting"], "team")
+		api.resolve_comment(root["name"])
+		self.assertEqual(frappe.db.get_value("Issue", name, "status"), "Replied")
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == name)
+		self.assertIsNone(row["awaiting"])
+		self.assertEqual(row["last_comment"]["author"]["side"], "klien")  # info aktivitas tetap tampil
+		# tanpa tanggapan tim: klien menutup utasnya sendiri → tetap menunggu tim
+		n2 = self._create(self.w.a1, self.w.proj_a, [{"subject": "belum dijawab"}])[0]
+		frappe.set_user(self.w.a1)
+		c = api.add_comment(self.w.proj_a, "Issue", n2, "Ada update?")
+		api.resolve_comment(c["name"])
+		self.assertEqual(frappe.db.get_value("Issue", n2, "status"), "Open")
+		row = next(r for r in api.feedback(self.w.proj_a)["items"] if r["name"] == n2)
+		self.assertEqual(row["awaiting"], "team")
