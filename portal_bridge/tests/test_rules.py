@@ -170,6 +170,10 @@ class TestRules(FrappeTestCase):
 	def test_meeting_note_draft_edit_and_send_from_portal(self):
 		frappe.set_user("Administrator")
 		note = frappe.get_doc({"doctype": "Portal Meeting Note", "project": self.w.proj_b, "title": "Draft portal", "meeting_date": nowdate()}).insert(ignore_permissions=True)
+		self.assertEqual((note.start_time, note.end_time), (None, None))  # bukan jam input otomatis dari Frappe
+		with_time = frappe.get_doc({"doctype": "Portal Meeting Note", "project": self.w.proj_b, "title": "Berjam", "meeting_date": nowdate(), "start_time": "09:00:00"}).insert(ignore_permissions=True)
+		self.assertEqual(str(with_time.start_time), "09:00:00")
+		with_time.delete(ignore_permissions=True)
 		frappe.set_user(self.w.b1)
 		with self.assertRaises(frappe.PermissionError):
 			api.save_meeting_note_draft(note.name, {"title": "diubah klien"})

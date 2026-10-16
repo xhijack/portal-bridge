@@ -11,6 +11,12 @@ from portal_bridge.rules.meeting_notes import rule_12_on_sent, rule_15_on_edit_a
 
 class PortalMeetingNote(Document):
 	def before_insert(self):
+		# Frappe mengisi field Time kosong dengan nowtime() (bermikrodetik) saat dokumen baru; jam rapat yang tidak diisi
+		# jangan berubah jadi jam input. Isian pengguna tidak pernah bermikrodetik.
+		for f in ("start_time", "end_time"):
+			v = self.get(f)
+			if v and "." in str(v):
+				self.set(f, None)
 		# seq dipakai autoname, jadi harus terisi sebelum set_new_name()
 		if not self.seq:
 			last = frappe.db.get_value("Portal Meeting Note", {"project": self.project}, "max(seq)")
