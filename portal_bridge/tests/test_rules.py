@@ -165,3 +165,34 @@ class TestRules(FrappeTestCase):
 			api.delete_comment(reply["name"])
 		threads = api.comments("Task", self.w.task_a_vis)["threads"]
 		self.assertEqual(len(threads[0]["replies"]), 1)
+
+	# edit draft dari portal oleh tim internal, lalu kirim → notifikasi ke klien proyek + peserta klien
+	def test_meeting_note_draft_edit_and_send_from_portal(self):
+		frappe.set_user("Administrator")
+		note = frappe.get_doc({"doctype": "Portal Meeting Note", "project": self.w.proj_b, "title": "Draft portal", "meeting_date": nowdate()}).insert(ignore_permissions=True)
+		frappe.set_user(self.w.b1)
+		with self.assertRaises(frappe.PermissionError):
+			api.save_meeting_note_draft(note.name, {"title": "diubah klien"})
+		frappe.set_user(self.w.pic)
+		self.assertTrue(api.meeting_note(note.name)["can_edit"])
+		with self.assertRaises(frappe.ValidationError):
+			api.send_meeting_note(note.name)  # belum ada peserta/pembahasan
+		api.save_meeting_note_draft(note.name, {
+			"title": "Rapat UAT",
+			"attendees": [{"user": self.w.b1, "present": 1}, {"user": self.w.pic}, {"full_name": "Tamu Vendor", "side": "Klien"}],
+			"topics": [{"title": "Skenario", "body": "<p>12 skenario</p>", "resolution": "<p>Disetujui</p>"}, {"title": "  "}],
+			"decisions": [{"body": "UAT mulai Senin"}],
+			"actions": [{"body": "Siapkan user UAT", "assignee": self.w.b1, "due": add_days(nowdate(), 3)}],
+		})
+		d = frappe.get_doc("Portal Meeting Note", note.name)
+		self.assertEqual((d.title, len(d.attendees), len(d.topics), d.topics[0].resolution), ("Rapat UAT", 3, 1, "<p>Disetujui</p>"))
+		self.assertEqual([a.side for a in d.attendees], ["Klien", "Internal", "Klien"])
+		self.assertEqual((d.decisions[0].kind, d.decisions[0].status), ("Keputusan", "Proposed"))
+		with self.assertRaises(frappe.ValidationError):
+			api.save_meeting_note_draft(note.name, {"actions": [{"body": "x", "assignee": self.w.a2}]})  # bukan anggota proyek
+		res = api.send_meeting_note(note.name)
+		self.assertEqual(res["status"], "Sent")
+		self.assertTrue(frappe.db.exists("Portal Notification", {"user": self.w.b1, "template": "meeting_note_sent", "project": self.w.proj_b}))
+		self.assertTrue(frappe.get_doc("Portal Meeting Note", note.name).actions[0].task)
+		with self.assertRaises(frappe.ValidationError):
+			api.save_meeting_note_draft(note.name, {"title": "setelah kirim"})

@@ -18,6 +18,7 @@ from portal_bridge.utils import (
 	elevated,
 	internal_pics,
 	is_client,
+	is_internal,
 	portal_url,
 	project_company,
 	project_users,
@@ -43,8 +44,11 @@ def rule_12_on_sent(doc):
 			row.task = _make_action_task(doc, row, task_type, phase)
 	ctx = {"seq": doc.seq, "title": doc.title, "confirm_due": frappe.utils.formatdate(doc.confirm_due), "link": _link(doc),
 	       "project_name": frappe.db.get_value("Project", doc.project, "project_name")}
-	for u in project_users(doc.project, side="klien"):
-		notify.enqueue(u["user"], "meeting_note_sent", ctx, doc.project, dedupe_key=f"mn-sent:{doc.name}:{doc.version}:{u['user']}")
+	# klien proyek + peserta sisi klien yang tercantum di notulen (walau belum terdaftar di proyek)
+	recipients = {u["user"] for u in project_users(doc.project, side="klien")}
+	recipients |= {a.user for a in doc.attendees if a.user and is_client(a.user)}
+	for u in sorted(recipients):
+		notify.enqueue(u, "meeting_note_sent", ctx, doc.project, dedupe_key=f"mn-sent:{doc.name}:{doc.version}:{u}")
 	audit("meeting_note_sent", doc.project, doc.doctype, doc.name)
 
 
@@ -179,3 +183,76 @@ def _notify_pics(doc, status):
 	}
 	for pic in internal_pics(doc.project):
 		notify.enqueue(pic, "meeting_note_decided", ctx, doc.project)
+
+
+# ---------------------------------------------------------------- edit draft dari portal (tim internal)
+
+HEADER_FIELDS = ("title", "meeting_date", "start_time", "end_time", "location")
+
+
+def _require_editor(doc):
+	if not is_internal() or not frappe.has_permission("Portal Meeting Note", "write", doc):
+		frappe.throw(_("Hanya tim penyedia jasa yang bisa mengubah notulen."), frappe.PermissionError)
+	if doc.status != "Draft":
+		frappe.throw(_("Notulen sudah dikirim; ubah lewat Desk agar versi tercatat."), frappe.ValidationError)
+
+
+def save_draft(name: str, data: dict):
+	"""Ganti isi draft: header + peserta, pembahasan (dengan solusi), keputusan, tindak lanjut."""
+	doc = frappe.get_doc("Portal Meeting Note", name)
+	_require_editor(doc)
+	members = {u["user"]: u for u in project_users(doc.project)}
+	for f in HEADER_FIELDS:
+		if f in data:
+			doc.set(f, data.get(f) or None)
+	if not (doc.title or "").strip():
+		frappe.throw(_("Judul rapat wajib diisi."), frappe.ValidationError)
+	if "attendees" in data:
+		rows = []
+		for a in data.get("attendees") or []:
+			user = (a.get("user") or "").strip() or None
+			name_ = (a.get("full_name") or "").strip()
+			if user and not frappe.db.exists("User", user):
+				frappe.throw(_("User {0} tidak ditemukan.").format(user), frappe.ValidationError)
+			if not user and not name_:
+				continue
+			side = a.get("side") or (("Klien" if is_client(user) else "Internal") if user else "Klien")
+			rows.append({"user": user, "full_name": name_ or (frappe.utils.get_fullname(user) if user else None), "role": a.get("role") or None,
+			             "side": side if side in ("Klien", "Internal") else "Klien", "present": 1 if a.get("present", True) else 0})
+		doc.set("attendees", rows)
+	if "topics" in data:
+		doc.set("topics", [{"seq": i, "title": t.get("title").strip(), "body": t.get("body") or None, "resolution": t.get("resolution") or None}
+		                   for i, t in enumerate([t for t in data.get("topics") or [] if (t.get("title") or "").strip()], start=1)])
+	if "decisions" in data:
+		doc.set("decisions", [{k: d.get(k) or None for k in ("code", "kind", "body", "proposed_by", "approved_by", "status", "review_date")}
+		                      for d in data.get("decisions") or [] if (d.get("body") or "").strip()])
+		for d in doc.decisions:
+			d.kind = d.kind or "Keputusan"
+			d.status = d.status or "Proposed"
+	if "actions" in data:
+		rows = []
+		for a in data.get("actions") or []:
+			if not (a.get("body") or "").strip():
+				continue
+			assignee = a.get("assignee") or None
+			if assignee and assignee not in members:
+				frappe.throw(_("PIC tindak lanjut {0} bukan anggota proyek.").format(assignee), frappe.ValidationError)
+			rows.append({"body": a["body"].strip(), "assignee": assignee, "due": a.get("due") or None, "task": a.get("task") or None})
+		doc.set("actions", rows)
+	doc.save()
+	audit("meeting_note_draft_save", doc.project, doc.doctype, doc.name,
+	      {"attendees": len(doc.attendees), "topics": len(doc.topics), "decisions": len(doc.decisions), "actions": len(doc.actions)})
+	return doc
+
+
+def send_draft(name: str):
+	"""Draft → Sent: aturan 12 (batas konfirmasi, Task tindak lanjut, notifikasi ke klien)."""
+	doc = frappe.get_doc("Portal Meeting Note", name)
+	_require_editor(doc)
+	if not doc.attendees:
+		frappe.throw(_("Isi minimal satu peserta sebelum mengirim."), frappe.ValidationError)
+	if not doc.topics:
+		frappe.throw(_("Isi minimal satu pembahasan sebelum mengirim."), frappe.ValidationError)
+	doc.status = "Sent"
+	doc.save()
+	return doc

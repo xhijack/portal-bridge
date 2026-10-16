@@ -527,8 +527,27 @@ def meeting_note(name: str):
 		"next": siblings[idx + 1] if idx is not None and idx + 1 < len(siblings) else None,
 		"all": siblings,
 		"can_decide": can_approve(project) if is_client() else False,
+		"can_edit": doc.status == "Draft" and is_internal() and bool(frappe.has_permission("Portal Meeting Note", "write", doc)),
 		"mentionables": project_users(project),
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_meeting_note_draft(name: str, data):
+	"""Tim internal mengubah draft notulen dari portal (header, peserta, pembahasan+solusi, keputusan, tindak lanjut)."""
+	require_access(frappe.db.get_value("Portal Meeting Note", name, "project"))
+	if isinstance(data, str):
+		data = frappe.parse_json(data)
+	doc = mn.save_draft(name, data or {})
+	return {"ok": True, "name": doc.name, "status": doc.status}
+
+
+@frappe.whitelist(methods=["POST"])
+def send_meeting_note(name: str):
+	"""Draft → Sent; klien proyek dan peserta klien menerima notifikasi notulen tercatat dan menunggu konfirmasi."""
+	require_access(frappe.db.get_value("Portal Meeting Note", name, "project"))
+	doc = mn.send_draft(name)
+	return {"ok": True, "status": doc.status, "confirm_due": doc.confirm_due}
 
 
 @frappe.whitelist(methods=["POST"])
